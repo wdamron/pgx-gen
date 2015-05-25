@@ -1,0 +1,25 @@
+package pgxgen
+
+var OidNames = map[string]string{
+	"bool":        "BoolOid",
+	"int2":        "Int2Oid",
+	"int4":        "Int4Oid",
+	"int8":        "Int8Oid",
+	"float4":      "Float4Oid",
+	"float8":      "Float8Oid",
+	"bytea":       "ByteaOid",
+	"text":        "TextOid",
+	"varchar":     "VarcharOid",
+	"date":        "DateOid",
+	"timestampTz": "TimestampTzOid",
+	"timestamp":   "TimestampOid",
+	"[]bool":      "BoolArrayOid",
+	"[]int2":      "Int2ArrayOid",
+	"[]int4":      "Int4ArrayOid",
+	"[]int8":      "Int8ArrayOid",
+	"[]float4":    "Float4ArrayOid",
+	"[]float8":    "Float8ArrayOid",
+	"[]text":      "TextArrayOid",
+	"[]varchar":   "VarcharArrayOid",
+	"[]timestamp": "TimestampArrayOid",
+}
