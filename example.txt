@@ -1,0 +1,6 @@
+package pointz
+
+type Point struct {
+	X []string `pgx:"name:x;type:[]varchar"`
+	Y *int64   `pgx:"name:y;type:int4"`
+}
