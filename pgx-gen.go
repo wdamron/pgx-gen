@@ -20,7 +20,7 @@ func main() {
 		Usage()
 		os.Exit(1)
 	}
-	f, err := astx.ParseFile(path)
+	af, err := astx.ParseFile(path)
 	if err != nil {
 		Err(err)
 		os.Exit(1)
@@ -38,7 +38,8 @@ func main() {
 	}
 	defer out.Close()
 
-	gen, err := lib.Gen(f)
+	f := lib.NewFile(af)
+	gen, err := f.Gen()
 	if err != nil {
 		Err(err)
 		os.Exit(1)

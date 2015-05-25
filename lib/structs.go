@@ -5,14 +5,12 @@ import (
 )
 
 type Struct struct {
-	Struct astx.Struct
+	astx.Struct
+	Columns []Column
 }
 
-func (s *Struct) StructName() string {
-	return s.Struct.Name
-}
-
-func (s *Struct) GetColumns() []Column {
+func NewStruct(as *astx.Struct) *Struct {
+	s := &Struct{Struct: *as}
 	cols := []Column{}
 	for i, f := range s.Struct.Fields {
 		colname := GetFieldColumnName(f)
@@ -35,6 +33,8 @@ func (s *Struct) GetColumns() []Column {
 		}
 		cols = append(cols, col)
 	}
-
-	return cols
+	if len(cols) != 0 {
+		s.Columns = cols
+	}
+	return s
 }
