@@ -1,0 +1,8 @@
+// +build ignore
+package pointz
+
+//pgxgen: -table="points"
+type Point struct {
+	X []string `pgx:"col:x;type:[]varchar"`
+	Y *int64 `pgx:"col:y;type:int4"`
+}

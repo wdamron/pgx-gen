@@ -1,2 +1,2 @@
 # pqx-gen
-Generate Go struct encoding/decoding helpers for pqx (Postgres), using "go generate"
+Generate Go struct encoding/decoding helpers for pgx (Postgres), using "go generate"
