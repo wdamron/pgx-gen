@@ -92,6 +92,12 @@ func (f *File) gen() ([]byte, error) {
 
 		// 6. method def for {struct-name}.DecodeRow:
 		out += genRowDecoder(&s)
+
+		out += genParamsEncoderType(&s)
+		out += genEncoderFactory(&s)
+		out += genBindVal(&s)
+		out += genEncodeParamFormats(&s)
+		out += genEncodeParams(&s)
 	}
 
 	return []byte(out), nil
@@ -125,7 +131,7 @@ func genImports(f *File) string {
 // 1. generate type def for {struct-name}ColumnDecoder func
 func genColDecoderType(s *Struct) string {
 	out := fmt.Sprintf("// %sColumnDecoder funcs can be used to decode a single column value\n", s.Name)
-	out += fmt.Sprintf("// from a pgx.ValueReader into a %s\n", s.Name)
+	out += fmt.Sprintf("// from a pgx.ValueReader into type %s\n", s.Name)
 	out += fmt.Sprintf("type %sColumnDecoder func(*%s, *pgx.ValueReader) error\n\n", s.Name, s.Name)
 	return out
 }
@@ -135,7 +141,7 @@ const tableTypeFmt = `
 // corresponding with type %s
 type %sTableType struct {
 	// Decoders can be used to decode a single column value from a
-	// pgx.ValueReader into a %s
+	// pgx.ValueReader into type %s
 	Decoders    [%d]%sColumnDecoder
 	ColumnNames [%d]string
 	// Aliases contains an ordered list of column names aliased as hex-encoded
@@ -228,6 +234,14 @@ func genTable(s *Struct) (string, error) {
 	out += genColNameArray(s)
 	// include ordered list of column aliases:
 	out += genAliasArray(s)
+
+	out += genFormatArray(s)
+	encoders, err := genEncoderArray(s)
+	if err != nil {
+		return "", err
+	}
+	out += encoders
+
 	return out + "}\n\n", nil
 }
 
@@ -258,24 +272,18 @@ func genColumnDecoder(s *Struct, c *Column) (string, error) {
 	if op == Op(0) {
 		return "", fmt.Errorf("no column decoder available for field: %s", f.Name)
 	}
-	decoderName := DecoderNames[coltype]
-	if decoderName == "" {
+	oidName := OidNames[coltype]
+	if oidName == "" {
 		return "", fmt.Errorf("no column decoder available for field: %s", f.Name)
 	}
-	oid := OidNames[coltype]
-	if oid == "" {
-		return "", fmt.Errorf("no oid name found for field: %s (type=%s)", f.Name, coltype)
-	}
-
 	// TODO(wd): check overflow, when necessary
 	out := fmt.Sprintf("// Decode column %s::%s into (*%s).%s\n", c.Name, coltype, s.Name, f.Name)
 	out += fmt.Sprintf("func(v *%s, vr *pgx.ValueReader) error {\n", s.Name)
-	out += fmt.Sprintf("if vr.Type().DataType != pgx.%s {\nreturn errors.New(\"mismatched data types\")\n}\n", oid)
 	var prefix, suffix string
 	if op.MaskCast() != Op(0) {
 		prefix, suffix = op.FormatCast()+"(", ")"
 	}
-	out += fmt.Sprintf("x := %svr.%s()%s\n", prefix, decoderName, suffix)
+	out += fmt.Sprintf("x := %svr.Decode%s()%s\n", prefix, oidName, suffix)
 	out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
 	if op.PtrAssign() {
 		out += "*"
@@ -311,8 +319,56 @@ func genAliasArray(s *Struct) string {
 	return out + "},\n"
 }
 
+// 5.d. include ordered list of column format codes (text=0, binary=1)
+func genFormatArray(s *Struct) string {
+	out := fmt.Sprintf("Formats: [%d]int{", len(s.Columns))
+	for i, c := range s.Columns {
+		if BinaryFmtOids[OidNames[c.Type]] {
+			out += "1"
+		} else {
+			out += "0"
+		}
+		if i != len(s.Columns)-1 {
+			out += ", "
+		}
+	}
+	return out + "},\n"
+}
+
+// 5.e. include ordered list of field encoders
+func genEncoderArray(s *Struct) (string, error) {
+	out := fmt.Sprintf("Encoders: [%d]func(*%s, *pgx.WriteBuf) error {\n", len(s.Columns), s.Name)
+	for _, c := range s.Columns {
+		f := c.StructField
+		if Encoders[f.Type] == nil {
+			return "", fmt.Errorf("no column decoder available for field: %s", f.Name)
+		}
+		op := Encoders[f.Type][c.Type]
+		if op == Op(0) {
+			return "", fmt.Errorf("no column decoder available for field: %s", f.Name)
+		}
+		oidName := OidNames[c.Type]
+		if oidName == "" {
+			return "", fmt.Errorf("no column decoder available for field: %s", f.Name)
+		}
+
+		out += fmt.Sprintf("func(v *%s, wbuf *pgx.WriteBuf) error {\n", s.Name)
+		var castPrefix, castSuffix string
+		if op.MaskCast() != Op(0) {
+			castPrefix, castSuffix = op.FormatCast()+"(", ")"
+		}
+		deref := ""
+		if op.DerefPass() {
+			deref = "*"
+		}
+		out += fmt.Sprintf("wbuf.Encode%s(%s%sv.%s%s)\n", oidName, castPrefix, deref, c.StructField.Name, castSuffix)
+		out += "return nil\n},\n"
+	}
+	return out + "},\n", nil
+}
+
 const rowDecoderFmt = `
-// DecodeRow decodes a SQL row into a %s.
+// DecodeRow decodes a SQL row into type %s.
 // If an error is returned, the caller should call Rows.Close()
 func (v *%s) DecodeRow(r *pgx.Rows) error {
 	for _ = range r.FieldDescriptions() {
@@ -366,4 +422,94 @@ func genRowDecoder(s *Struct) string {
 	cases += `default: return errors.New("unknown column name: " + colname)`
 
 	return fmt.Sprintf(rowDecoderFmt, s.Name, s.Name, len(s.Columns)-1, s.Name, s.Name, cases)
+}
+
+const paramsEncoderFmt = `
+// %sParamsEncoder encodes parameter formats and values for a prepared statement
+// to a buffer, and implements pgx.ParamsEncoder
+type %sParamsEncoder struct {
+	Formats []int
+	ValEncoders []func(v *%s, wbuf *pgx.WriteBuf)
+	v *%s
+}
+`
+
+func genParamsEncoderType(s *Struct) string {
+	return fmt.Sprintf(paramsEncoderFmt, s.Name, s.Name, s.Name, s.Name)
+}
+
+const newEncoderFmt = `
+func (t *%sTableType) Encoder(cols ...string) (*%sParamsEncoder, error) {
+	formats := make([]int, 0, len(cols))
+	encoders := make([]func(*%s, *pgx.WriteBuf), 0, len(cols))
+
+	for _, colname := range cols {
+		switch colname {
+		%s
+		}
+	}
+
+	pe := &%sParamsEncoder{
+		Formats: formats,
+		ValEncoders: encoders,
+	}
+	return pe, nil
+}
+`
+
+func genEncoderFactory(s *Struct) string {
+	const caseFmt = `case "%s":
+		formats = append(formats, %sTable.Formats[%d])
+		encoders = append(encoders, %sTable.Encoders[%d])
+`
+	var cases string
+	for i, col := range s.Columns {
+		cases += fmt.Sprintf(caseFmt, col.Name, s.Name, i, s.Name, i)
+	}
+	cases += `default: return nil, errors.New("unknown column name: " + colname)`
+
+	return fmt.Sprintf(newEncoderFmt, s.Name, s.Name, s.Name, cases, s.Name)
+}
+
+const bindValFmt = `
+func (pe %sParamsEncoder) Bind(v *%s) pgx.ParamsEncoder {
+	return &%sParamsEncoder{
+		Formats: pe.Formats,
+		ValEncoders: pe.ValEncoders,
+		v: v,
+	}
+}
+`
+
+func genBindVal(s *Struct) string {
+	return fmt.Sprintf(bindValFmt, s.Name, s.Name, s.Name)
+}
+
+const encodeParamFormatsFmt = `
+// EncodeParamFormats encodes the formats of all params for the given statement
+// into wbuf
+func (pe *%sParamsEncoder) EncodeParamFormats(wbuf *pgx.WriteBuf) error {
+	for _, format := range pe.Formats {
+		wbuf.WriteInt16(int16(format))
+	}
+	return nil
+}
+
+`
+
+func genEncodeParamFormats(s *Struct) string {
+	return fmt.Sprintf(encodeParamFormatsFmt, s.Name)
+}
+
+const encodeParamsFmt = `
+func (pe *%sParamsEncoder) EncodeParams(wbuf *pgx.WriteBuf) error {
+	for _, enc := range pe.ValEncoders {
+		enc(pe.v, wbuf)
+	}
+	return nil
+}
+`
+
+func genEncodeParams(s *Struct) string {
+	return fmt.Sprintf(encodeParamsFmt, s.Name)
 }

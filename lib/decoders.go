@@ -137,28 +137,8 @@ var Decoders = map[string]OpMap{
 		"[]time.Time":  OpAssign,
 		"*[]time.Time": OpPtrAssign,
 	},
-}
-
-var DecoderNames = map[string]string{
-	"bool":        "DecodeBool",
-	"int2":        "DecodeInt2",
-	"int4":        "DecodeInt4",
-	"int8":        "DecodeInt8",
-	"float4":      "DecodeFloat4",
-	"float8":      "DecodeFloat8",
-	"bytea":       "DecodeBytea",
-	"text":        "DecodeText",
-	"varchar":     "DecodeVarchar",
-	"date":        "DecodeDate",
-	"timestampTz": "DecodeTimestampTz",
-	"timestamp":   "DecodeTimestamp",
-	"[]bool":      "DecodeBoolArray",
-	"[]int2":      "DecodeInt2Array",
-	"[]int4":      "DecodeInt4Array",
-	"[]int8":      "DecodeInt8Array",
-	"[]float4":    "DecodeFloat4Array",
-	"[]float8":    "DecodeFloat8Array",
-	"[]text":      "DecodeTextArray",
-	"[]varchar":   "DecodeVarcharArray",
-	"[]timestamp": "DecodeTimestampArray",
+	"[]timestampTz": OpMap{
+		"[]time.Time":  OpAssign,
+		"*[]time.Time": OpPtrAssign,
+	},
 }

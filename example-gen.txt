@@ -10,14 +10,14 @@ import (
 )
 
 // PointColumnDecoder funcs can be used to decode a single column value
-// from a pgx.ValueReader into a Point
+// from a pgx.ValueReader into type Point
 type PointColumnDecoder func(*Point, *pgx.ValueReader) error
 
 // PointTableType is the type of PointTable, which describes the table
 // corresponding with type Point
 type PointTableType struct {
 	// Decoders can be used to decode a single column value from a
-	// pgx.ValueReader into a Point
+	// pgx.ValueReader into type Point
 	Decoders    [2]PointColumnDecoder
 	ColumnNames [2]string
 	// Aliases contains an ordered list of column names aliased as hex-encoded
@@ -59,9 +59,6 @@ var PointTable = PointTableType{
 	Decoders: [2]PointColumnDecoder{
 		// Decode column x::[]varchar into (*Point).X
 		func(v *Point, vr *pgx.ValueReader) error {
-			if vr.Type().DataType != pgx.VarcharArrayOid {
-				return errors.New("mismatched data types")
-			}
 			x := vr.DecodeVarcharArray()
 			if vr.Err() != nil {
 				return vr.Err()
@@ -71,9 +68,6 @@ var PointTable = PointTableType{
 		},
 		// Decode column y::int4 into (*Point).Y
 		func(v *Point, vr *pgx.ValueReader) error {
-			if vr.Type().DataType != pgx.Int4Oid {
-				return errors.New("mismatched data types")
-			}
 			x := int64(vr.DecodeInt4())
 			if vr.Err() != nil {
 				return vr.Err()
@@ -92,9 +86,20 @@ var PointTable = PointTableType{
 		"x as __00::[]varchar",
 		"y as __01::int4",
 	},
+	Formats: [2]int{1, 1},
+	Encoders: [2]func(*Point, *pgx.WriteBuf) error{
+		func(v *Point, wbuf *pgx.WriteBuf) error {
+			wbuf.EncodeVarcharArray(v.X)
+			return nil
+		},
+		func(v *Point, wbuf *pgx.WriteBuf) error {
+			wbuf.EncodeInt4(int32(*v.Y))
+			return nil
+		},
+	},
 }
 
-// DecodeRow decodes a SQL row into a Point.
+// DecodeRow decodes a SQL row into type Point.
 // If an error is returned, the caller should call Rows.Close()
 func (v *Point) DecodeRow(r *pgx.Rows) error {
 	for _ = range r.FieldDescriptions() {
@@ -137,6 +142,62 @@ func (v *Point) DecodeRow(r *pgx.Rows) error {
 		if err := dec(v, vr); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// PointParamsEncoder encodes parameter formats and values for a prepared statement
+// to a buffer, and implements pgx.ParamsEncoder
+type PointParamsEncoder struct {
+	Formats     []int
+	ValEncoders []func(v *Point, wbuf *pgx.WriteBuf)
+	v           *Point
+}
+
+func (t *PointTableType) Encoder(cols ...string) (*PointParamsEncoder, error) {
+	formats := make([]int, 0, len(cols))
+	encoders := make([]func(*Point, *pgx.WriteBuf), 0, len(cols))
+
+	for _, colname := range cols {
+		switch colname {
+		case "x":
+			formats = append(formats, PointTable.Formats[0])
+			encoders = append(encoders, PointTable.Encoders[0])
+		case "y":
+			formats = append(formats, PointTable.Formats[1])
+			encoders = append(encoders, PointTable.Encoders[1])
+		default:
+			return nil, errors.New("unknown column name: " + colname)
+		}
+	}
+
+	pe := &PointParamsEncoder{
+		Formats:     formats,
+		ValEncoders: encoders,
+	}
+	return pe, nil
+}
+
+func (pe PointParamsEncoder) Bind(v *Point) pgx.ParamsEncoder {
+	return &PointParamsEncoder{
+		Formats:     pe.Formats,
+		ValEncoders: pe.ValEncoders,
+		v:           v,
+	}
+}
+
+// EncodeParamFormats encodes the formats of all params for the given statement
+// into wbuf
+func (pe *PointParamsEncoder) EncodeParamFormats(wbuf *pgx.WriteBuf) error {
+	for _, format := range pe.Formats {
+		wbuf.WriteInt16(int16(format))
+	}
+	return nil
+}
+
+func (pe *PointParamsEncoder) EncodeParams(wbuf *pgx.WriteBuf) error {
+	for _, enc := range pe.ValEncoders {
+		enc(pe.v, wbuf)
 	}
 	return nil
 }

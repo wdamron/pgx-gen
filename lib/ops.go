@@ -10,6 +10,8 @@ type OpMap map[string]Op
 const (
 	OpAssign Op = 1 << iota
 	OpPtrAssign
+	OpPass
+	OpDerefPass
 	OpCheckOverflow
 )
 
@@ -49,6 +51,14 @@ func (op Op) Assign() bool {
 
 func (op Op) PtrAssign() bool {
 	return op&OpPtrAssign != 0
+}
+
+func (op Op) Pass() bool {
+	return op&OpPass != 0
+}
+
+func (op Op) DerefPass() bool {
+	return op&OpDerefPass != 0
 }
 
 func (op Op) CheckOverflow() bool {
