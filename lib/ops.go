@@ -13,6 +13,8 @@ const (
 	OpCustomScan
 	OpCustomEncode
 	OpCheckOverflow
+	OpHstoreMapEncode
+	OpHstoreMapDecode
 )
 
 // The high 8 bits of an op are reserved for the Op's cast type (if any).
@@ -69,6 +71,14 @@ func (op Op) CustomEncode() bool {
 
 func (op Op) CheckOverflow() bool {
 	return op&OpCheckOverflow != 0
+}
+
+func (op Op) HstoreMapEncode() bool {
+	return op&OpHstoreMapEncode != 0
+}
+
+func (op Op) HstoreMapDecode() bool {
+	return op&OpHstoreMapDecode != 0
 }
 
 func (op Op) FormatCast() string {

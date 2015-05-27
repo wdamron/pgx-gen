@@ -275,33 +275,37 @@ func genTable(s *Struct) (string, error) {
 	return out + "}\n\n", nil
 }
 
-// include ordered list of param-encoder funcs
+// include ordered list of param-encoder funcs (see genTable)
 func genEncoderArray(s *Struct) (string, error) {
 	out := fmt.Sprintf("Encoders: [%d]func(*%s, *pgx.WriteBuf) error {\n", len(s.Columns), s.Name)
 	for _, c := range s.Columns {
 		f := c.StructField
-		if Encoders[f.Type] == nil {
-			return "", fmt.Errorf("no column decoder available for field: %s", f.Name)
-		}
-		op := Encoders[f.Type][c.Type]
+		op := c.EncodeOp
 		if op == Op(0) {
-			return "", fmt.Errorf("no column decoder available for field: %s", f.Name)
+			return "", fmt.Errorf("no column encoder available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
 		}
-		oidName := OidNames[c.Type]
+		oidName := DataTypeNames[c.Type]
 		if oidName == "" {
-			return "", fmt.Errorf("no column decoder available for field: %s", f.Name)
+			return "", fmt.Errorf("no column oid available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
 		}
 
 		out += fmt.Sprintf("// Encode (*%s).%s as %s\n", s.Name, c.StructField.Name, c.Type)
 		out += fmt.Sprintf("func(v *%s, wbuf *pgx.WriteBuf) error {\n", s.Name)
-		if op.CustomEncode() {
+		switch {
+		case op.CustomEncode():
 			if c.Type == "hstore" {
 				oidName = "Oid(0)"
 			} else {
 				oidName += "Oid"
 			}
-			out += fmt.Sprintf("v.%s.Encode(wbuf, pgx.%s)\n", f.Name, oidName)
-		} else {
+			out += fmt.Sprintf("return v.%s.Encode(wbuf, pgx.%s)\n", f.Name, oidName)
+		case op.HstoreMapEncode():
+			deref := ""
+			if op.DerefPass() {
+				deref = "*"
+			}
+			out += fmt.Sprintf("return pgx.Hstore(%sv.%s).Encode(wbuf, pgx.Oid(0))\n", deref, f.Name)
+		default:
 			var castPrefix, castSuffix string
 			if op.MaskCast() != Op(0) {
 				castPrefix, castSuffix = op.FormatCast()+"(", ")"
@@ -310,14 +314,14 @@ func genEncoderArray(s *Struct) (string, error) {
 			if op.DerefPass() {
 				deref = "*"
 			}
-			out += fmt.Sprintf("wbuf.Encode%s(%s%sv.%s%s)\n", oidName, castPrefix, deref, c.StructField.Name, castSuffix)
+			out += fmt.Sprintf("wbuf.Encode%s(%s%sv.%s%s)\nreturn nil\n", oidName, castPrefix, deref, c.StructField.Name, castSuffix)
 		}
-		out += "return nil\n},\n"
+		out += "},\n"
 	}
 	return out + "},\n", nil
 }
 
-// include ordered list of column-decoder funcs
+// include ordered list of column-decoder funcs (see genTable)
 func genColDecoderArray(s *Struct) (string, error) {
 	count := len(s.Columns)
 	out := fmt.Sprintf("Decoders: [%d]func(*%s, *pgx.ValueReader) error{\n", count, s.Name)
@@ -331,47 +335,49 @@ func genColDecoderArray(s *Struct) (string, error) {
 	return out + "},\n", nil
 }
 
-// generate column-decoder func
+// generate column-decoder func (see genColDecoderArray)
 func genColumnDecoder(s *Struct, c *Column) (string, error) {
 	f := c.StructField
 	coltype := c.Type
-	if coltype == "" {
-		return "", fmt.Errorf("no column type found in field: %s", f.Name)
-	}
-	if Decoders[coltype] == nil {
-		return "", fmt.Errorf("no column decoder available for field: %s", f.Name)
-	}
-	op := Decoders[coltype][f.Type]
+	op := c.DecodeOp
 	if op == Op(0) {
-		return "", fmt.Errorf("no column decoder available for field: %s (coltype=%s, fieldtype=%s)", f.Name, c.Type, f.Type)
+		return "", fmt.Errorf("no column decoder available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
 	}
-	oidName := OidNames[coltype]
-	if oidName == "" {
-		return "", fmt.Errorf("no column oid for field: %s", f.Name)
+	dtName := DataTypeNames[coltype]
+	if dtName == "" {
+		return "", fmt.Errorf("no column oid available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
 	}
 	// TODO(wd): check overflow, when necessary
 	out := fmt.Sprintf("// Decode column %s::%s into (*%s).%s\n", c.Name, coltype, s.Name, f.Name)
 	out += fmt.Sprintf("func(v *%s, vr *pgx.ValueReader) error {\n", s.Name)
-	if op.CustomScan() {
-		out += fmt.Sprintf("if err := v.%s.Scan(vr); err != nil {\nreturn err\n}\n", f.Name)
-	} else {
+
+	switch {
+	case op.CustomScan():
+		out += fmt.Sprintf("return v.%s.Scan(vr)\n", f.Name)
+	case op.HstoreMapDecode():
+		deref := ""
+		if op.PtrAssign() {
+			deref = "*"
+		}
+		out += fmt.Sprintf("return pgx.Hstore(%sv.%s).Scan(vr)\n", deref, f.Name)
+	default:
 		var prefix, suffix string
 		if op.MaskCast() != Op(0) {
 			prefix, suffix = op.FormatCast()+"(", ")"
 		}
-		out += fmt.Sprintf("x := %svr.Decode%s()%s\n", prefix, oidName, suffix)
+		out += fmt.Sprintf("x := %svr.Decode%s()%s\n", prefix, dtName, suffix)
 		out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
 		if op.PtrAssign() {
 			out += "*"
 		}
-		out += fmt.Sprintf("v.%s = x\n", f.Name)
+		out += fmt.Sprintf("v.%s = x\nreturn nil\n", f.Name)
 	}
-	out += "return nil\n},\n"
+	out += "},\n"
 
 	return out, nil
 }
 
-// include ordered list of column names
+// include ordered list of column names (see genTable)
 func genColNameArray(s *Struct) string {
 	out := fmt.Sprintf("Names: [%d]string{\n", len(s.Columns))
 	for _, c := range s.Columns {
@@ -380,7 +386,7 @@ func genColNameArray(s *Struct) string {
 	return out + "},\n"
 }
 
-// include ordered list of column types
+// include ordered list of column types (see genTable)
 func genColTypeArray(s *Struct) string {
 	out := fmt.Sprintf("Types: [%d]string{\n", len(s.Columns))
 	for _, c := range s.Columns {
@@ -389,7 +395,7 @@ func genColTypeArray(s *Struct) string {
 	return out + "},\n"
 }
 
-// include ordered list of column aliases
+// include ordered list of column aliases (see genTable)
 func genAliasArray(s *Struct) string {
 	out := "// Aliases contains an ordered list of column names aliased as hex-encoded\n"
 	out += "// indexes, for faster look-ups during decoding\n"
@@ -406,7 +412,7 @@ func genAliasArray(s *Struct) string {
 	return out + "},\n"
 }
 
-// include ordered list of column oids
+// include ordered list of column oids (see genTable)
 func genOidArray(s *Struct) string {
 	out := fmt.Sprintf("Oids: [%d]pgx.Oid{\n", len(s.Columns))
 	for _, c := range s.Columns {
@@ -414,18 +420,18 @@ func genOidArray(s *Struct) string {
 		if c.Type == "hstore" {
 			oidName = "Oid(0)"
 		} else {
-			oidName = OidNames[c.Type] + "Oid"
+			oidName = DataTypeNames[c.Type] + "Oid"
 		}
 		out += fmt.Sprintf("pgx.%s,\n", oidName)
 	}
 	return out + "},\n"
 }
 
-// include ordered list of column format codes (text=0, binary=1)
+// include ordered list of column format codes (text=0, binary=1) --  (see genTable)
 func genFormatArray(s *Struct) string {
 	out := fmt.Sprintf("Formats: [%d]int{", len(s.Columns))
 	for i, c := range s.Columns {
-		if BinaryFmtOids[OidNames[c.Type]] {
+		if BinaryDataTypes[DataTypeNames[c.Type]] {
 			out += "1"
 		} else {
 			out += "0"
@@ -496,11 +502,15 @@ type %sParamsEncoder struct {
 	ValueEncoders []func(v *%s, wbuf *pgx.WriteBuf)
 	v *%s
 }
+
+// %sParamsEncoder should implement pgx.ParamsEncoder
+var _ pgx.ParamsEncoder = (*%sParamsEncoder)(nil)
+
 `
 
 // generate type def for {struct-name}ParamsEncoder struct
 func genParamsEncoderType(s *Struct) string {
-	return fmt.Sprintf(paramsEncoderFmt, s.Name, s.Name, s.Name, s.Name)
+	return fmt.Sprintf(paramsEncoderFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name)
 }
 
 const newEncoderFmt = `
@@ -527,6 +537,7 @@ func (t *%sTableType) Encoder(colnames ...string) (*%sParamsEncoder, error) {
 	}
 	return pe, nil
 }
+
 `
 
 // generate method def for {struct-name}TableType.Encoder
@@ -544,6 +555,7 @@ func (pe %sParamsEncoder) Bind(v *%s) pgx.ParamsEncoder {
 		v: v,
 	}
 }
+
 `
 
 // generate method def for {struct-name}ParamsEncoder.Bind
@@ -553,7 +565,6 @@ func genBindVal(s *Struct) string {
 
 const encodeParamFormatsFmt = `
 // EncodeParamFormats encodes param formats into wbuf, as part of a raw query
-// (%sParamsEncoder should implement pgx.ParamsEncoder)
 func (pe *%sParamsEncoder) EncodeParamFormats(ps *pgx.PreparedStatement, wbuf *pgx.WriteBuf) error {
 	if len(ps.ParameterOids) != len(pe.Formats) {
 		return errors.New("param count of encoder and prepared statement do not match")
@@ -572,21 +583,21 @@ func (pe *%sParamsEncoder) EncodeParamFormats(ps *pgx.PreparedStatement, wbuf *p
 
 // generate method def for {struct-name}ParamsEncoder.EncodeParamFormats
 func genEncodeParamFormats(s *Struct) string {
-	return fmt.Sprintf(encodeParamFormatsFmt, s.Name, s.Name, s.Name)
+	return fmt.Sprintf(encodeParamFormatsFmt, s.Name, s.Name)
 }
 
 const encodeParamsFmt = `
 // EncodeParams encodes the param values into wbuf, as part of a raw query
-// (%sParamsEncoder should implement pgx.ParamsEncoder)
 func (pe *%sParamsEncoder) EncodeParams(ps *pgx.PreparedStatement, wbuf *pgx.WriteBuf) error {
 	for _, enc := range pe.ValueEncoders {
 		enc(pe.v, wbuf)
 	}
 	return nil
 }
+
 `
 
 // generate method def for {struct-name}ParamsEncoder.EncodeParams
 func genEncodeParams(s *Struct) string {
-	return fmt.Sprintf(encodeParamsFmt, s.Name, s.Name)
+	return fmt.Sprintf(encodeParamsFmt, s.Name)
 }

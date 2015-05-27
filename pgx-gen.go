@@ -31,12 +31,6 @@ func main() {
 	} else {
 		outpath = strings.TrimSuffix(path, filepath.Ext(path)) + "_pgxgen.go"
 	}
-	out, err := os.Create(outpath)
-	if err != nil {
-		Err(err)
-		os.Exit(1)
-	}
-	defer out.Close()
 
 	f := lib.NewFile(af)
 	gen, err := f.Gen()
@@ -44,6 +38,13 @@ func main() {
 		Err(err)
 		os.Exit(1)
 	}
+
+	out, err := os.Create(outpath)
+	if err != nil {
+		Err(err)
+		os.Exit(1)
+	}
+	defer out.Close()
 	_, err = out.Write(gen)
 	if err != nil {
 		Err(err)

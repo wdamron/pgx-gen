@@ -67,7 +67,7 @@ var Decoders = map[string]OpMap{
 		"pgx.NullInt64":  OpCustomScan,
 		"*pgx.NullInt64": OpCustomScan,
 	},
-	"float4": {
+	"real": {
 		"float32":          OpAssign,
 		"*float32":         OpPtrAssign,
 		"float64":          OpAssign | OpCastFloat64,
@@ -75,7 +75,7 @@ var Decoders = map[string]OpMap{
 		"pgx.NullFloat32":  OpCustomScan,
 		"*pgx.NullFloat32": OpCustomScan,
 	},
-	"float8": {
+	"float": {
 		"float32":          OpAssign | OpCastFloat32,
 		"*float32":         OpPtrAssign | OpCastFloat32,
 		"float64":          OpAssign,
@@ -121,50 +121,52 @@ var Decoders = map[string]OpMap{
 		"pgx.NullTime":  OpCustomScan,
 		"*pgx.NullTime": OpCustomScan,
 	},
-	"[]bool": {
+	"bool[]": {
 		"[]bool":  OpAssign,
 		"*[]bool": OpPtrAssign,
 	},
-	"[]int2": {
+	"int2[]": {
 		"[]int16":  OpAssign,
 		"*[]int16": OpPtrAssign,
 	},
-	"[]int4": {
+	"int4[]": {
 		"[]int32":  OpAssign,
 		"*[]int32": OpPtrAssign,
 	},
-	"[]int8": {
+	"int8[]": {
 		"[]int64":  OpAssign,
 		"*[]int64": OpPtrAssign,
 	},
-	"[]float4": {
+	"real[]": {
 		"[]float32":  OpAssign,
 		"*[]float32": OpPtrAssign,
 	},
-	"[]float8": {
+	"float[]": {
 		"[]float64":  OpAssign,
 		"*[]float64": OpPtrAssign,
 	},
-	"[]text": {
+	"text[]": {
 		"[]string":  OpAssign,
 		"*[]string": OpPtrAssign,
 	},
-	"[]varchar": {
+	"varchar[]": {
 		"[]string":  OpAssign,
 		"*[]string": OpPtrAssign,
 	},
-	"[]timestamp": {
+	"timestamp[]": {
 		"[]time.Time":  OpAssign,
 		"*[]time.Time": OpPtrAssign,
 	},
-	"[]timestampTz": {
+	"timestampTz[]": {
 		"[]time.Time":  OpAssign,
 		"*[]time.Time": OpPtrAssign,
 	},
 	"hstore": {
-		"pgx.Hstore":      OpCustomScan,
-		"*pgx.Hstore":     OpCustomScan,
-		"pgx.NullHstore":  OpCustomScan,
-		"*pgx.NullHstore": OpCustomScan,
+		"pgx.Hstore":         OpCustomScan,
+		"*pgx.Hstore":        OpCustomScan,
+		"pgx.NullHstore":     OpCustomScan,
+		"*pgx.NullHstore":    OpCustomScan,
+		"map[string]string":  OpHstoreMapDecode,
+		"*map[string]string": OpPtrAssign | OpHstoreMapDecode,
 	},
 }
