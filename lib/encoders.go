@@ -107,13 +107,13 @@ var Encoders = map[string]OpMap{
 		"bytea":   OpPass | OpCastBytes,
 		"text":    OpPass,
 		"varchar": OpPass,
-		"uuid":    OpUuidEncode,
+		"uuid":    OpPass | OpUuidEncode | OpUuidStringEncode,
 	},
 	"*string": {
 		"bytea":   OpDerefPass | OpCastBytes,
 		"text":    OpDerefPass,
 		"varchar": OpDerefPass,
-		"uuid":    OpDerefPass | OpUuidEncode,
+		"uuid":    OpDerefPass | OpUuidEncode | OpUuidStringEncode,
 	},
 	"[]byte": {
 		"bytea":   OpPass,
@@ -260,5 +260,13 @@ var Encoders = map[string]OpMap{
 	},
 	"*map[string]string": {
 		"hstore": OpDerefPass | OpHstoreMapEncode,
+	},
+
+	// custom encoders:
+	"uuid.UUID": {
+		"uuid": OpUuidEncode,
+	},
+	"*uuid.UUID": {
+		"uuid": OpDerefPass | OpUuidEncode,
 	},
 }
