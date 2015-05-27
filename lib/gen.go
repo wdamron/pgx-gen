@@ -470,7 +470,7 @@ func (v *%s) DecodeRow(r *pgx.Rows) error {
 		
 		// Slow path:
 		index := %sTable.Index(colname)
-		if index < 0  || index > len(%sTable.Decoders) - 1 {
+		if index < 0 {
 			return errors.New("column decoder for " + colname + " not found in %sTable")
 		}
 		if err := %sTable.Decoders[index](v, vr); err != nil {
@@ -484,7 +484,7 @@ func (v *%s) DecodeRow(r *pgx.Rows) error {
 
 // generate method def for {struct-name}.DecodeRow
 func genRowDecoder(s *Struct) string {
-	return fmt.Sprintf(rowDecoderFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name)
+	return fmt.Sprintf(rowDecoderFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name)
 }
 
 const paramsEncoderFmt = `
@@ -515,13 +515,7 @@ func (t *%sTableType) Encoder(colnames ...string) (*%sParamsEncoder, error) {
 		return nil, err
 	}
 	for i, index := range indexes {
-		if index < 0  || index > len(%sTable.Formats) - 1 {
-			return nil, errors.New("column format index out of range")
-		}
 		formats[i] = %sTable.Formats[index]
-		if index < 0  || index > len(%sTable.Encoders) - 1 {
-			return nil, errors.New("column encoder for " + colnames[i] + " not found in %sTable")
-		}
 		encoders[i] = %sTable.Encoders[index]
 	}
 	
@@ -537,7 +531,7 @@ func (t *%sTableType) Encoder(colnames ...string) (*%sParamsEncoder, error) {
 
 // generate method def for {struct-name}TableType.Encoder
 func genEncoderFactory(s *Struct) string {
-	return fmt.Sprintf(newEncoderFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name)
+	return fmt.Sprintf(newEncoderFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name)
 }
 
 const bindValFmt = `
