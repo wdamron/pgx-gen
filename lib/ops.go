@@ -15,6 +15,8 @@ const (
 	OpCheckOverflow
 	OpHstoreMapEncode
 	OpHstoreMapDecode
+	OpUuidEncode
+	OpUuidDecode
 )
 
 // The high 8 bits of an op are reserved for the Op's cast type (if any).
@@ -79,6 +81,14 @@ func (op Op) HstoreMapEncode() bool {
 
 func (op Op) HstoreMapDecode() bool {
 	return op&OpHstoreMapDecode != 0
+}
+
+func (op Op) UuidEncode() bool {
+	return op&OpUuidEncode != 0
+}
+
+func (op Op) UuidDecode() bool {
+	return op&OpUuidDecode != 0
 }
 
 func (op Op) FormatCast() string {

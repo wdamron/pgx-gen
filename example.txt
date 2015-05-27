@@ -6,4 +6,5 @@ type Point struct {
 	Z *pgx.NullInt32 `pgx:"name:z;type:integer"`
 	H *map[string]string `pgx:"name:h;type:hstore"`
 	H2 pgx.Hstore     `pgx:"name:h;type:hstore"`
+	u *string        `pgx:"name:id;type:uuid"`
 }

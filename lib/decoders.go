@@ -169,4 +169,8 @@ var Decoders = map[string]OpMap{
 		"map[string]string":  OpHstoreMapDecode,
 		"*map[string]string": OpPtrAssign | OpHstoreMapDecode,
 	},
+	"uuid": {
+		"string":  OpUuidDecode,
+		"*string": OpPtrAssign | OpUuidDecode,
+	},
 }

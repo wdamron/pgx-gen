@@ -9,6 +9,7 @@ import (
 )
 
 const DRIVER = "github.com/wdamron/pgx"
+const UUID_PKG = "github.com/satori/go.uuid"
 
 type File struct {
 	Pkg, Driver string
@@ -43,59 +44,68 @@ func (f *File) gen() ([]byte, error) {
 	// Always write the header (package name, pgxgen comment):
 	out := genHeader(f)
 
-	wroteImports := false
+	body := ""
+	writeImports := false
+	importUuid := false
 	for _, s := range f.Structs {
 		cols := s.Columns
 		count := len(cols)
 		if count == 0 {
 			continue
 		}
-		// include import statement, if not already included:
-		if !wroteImports {
-			out += genImports(f)
-			wroteImports = true
+		writeImports = true
+		for _, c := range cols {
+			if c.Type == "uuid" {
+				importUuid = true
+			}
 		}
 
 		// generate type def for {struct-name}TableType struct:
-		out += genTableType(&s)
+		body += genTableType(&s)
 
 		// generate var def for {struct-name}Table:
 		table, err := genTable(&s)
 		if err != nil {
 			return nil, err
 		}
-		out += table
+		body += table
 
 		// generate method def for {struct-name}TableType.Index:
-		out += genIndexMethod(&s)
+		body += genIndexMethod(&s)
 
 		// generate method def for {struct-name}TableType.Indexes:
-		out += genIndexesMethod(&s)
+		body += genIndexesMethod(&s)
 
 		// generate method def for ({struct-name})TableType.Alias:
-		out += genAliasMethod(&s)
+		body += genAliasMethod(&s)
 
 		// generate method def for ({struct-name})TableType.AliasAll:
-		out += genAliasAllMethod(&s)
+		body += genAliasAllMethod(&s)
 
 		// generate method def for {struct-name}.DecodeRow:
-		out += genRowDecoder(&s)
+		body += genRowDecoder(&s)
 
 		// generate type def for {struct-name}ParamsEncoder struct:
-		out += genParamsEncoderType(&s)
+		body += genParamsEncoderType(&s)
 
 		// generate method def for ({struct-name})TableType.Encoder:
-		out += genEncoderFactory(&s)
+		body += genEncoderFactory(&s)
 
 		// generate method def for {struct-name}ParamsEncoder.Bind:
-		out += genBindVal(&s)
+		body += genBindVal(&s)
 
 		// generate method def for {struct-name}ParamsEncoder.EncodeParamFormats:
-		out += genEncodeParamFormats(&s)
+		body += genEncodeParamFormats(&s)
 
 		// generate method def for {struct-name}ParamsEncoder.EncodeParams:
-		out += genEncodeParams(&s)
+		body += genEncodeParams(&s)
 	}
+
+	if writeImports {
+		out += genImports(f, importUuid)
+	}
+
+	out += body
 
 	return []byte(out), nil
 }
@@ -116,13 +126,18 @@ import (
 	"errors"
 	"encoding/hex"
 	
+	%s
 	"%s"
 )
 
 `
 
-func genImports(f *File) string {
-	return fmt.Sprintf(importsFmt, f.Driver)
+func genImports(f *File, importUuid bool) string {
+	uuidPkg := ""
+	if importUuid {
+		uuidPkg = `"` + UUID_PKG + `"`
+	}
+	return fmt.Sprintf(importsFmt, uuidPkg, f.Driver)
 }
 
 const tableTypeFmt = `
@@ -305,6 +320,15 @@ func genEncoderArray(s *Struct) (string, error) {
 				deref = "*"
 			}
 			out += fmt.Sprintf("return pgx.Hstore(%sv.%s).Encode(wbuf, pgx.Oid(0))\n", deref, f.Name)
+		case op.UuidEncode():
+			deref := ""
+			if op.DerefPass() {
+				deref = "*"
+			}
+			out += fmt.Sprintf("u, err := uuid.FromString(%sv.%s)\n", deref, f.Name)
+			out += "if err != nil {\nreturn err\n}\n"
+			out += "wbuf.WriteInt32(16)\n"
+			out += "wbuf.WriteBytes(u[:16])\nreturn nil\n"
 		default:
 			var castPrefix, castSuffix string
 			if op.MaskCast() != Op(0) {
@@ -360,6 +384,17 @@ func genColumnDecoder(s *Struct, c *Column) (string, error) {
 			deref = "*"
 		}
 		out += fmt.Sprintf("return pgx.Hstore(%sv.%s).Scan(vr)\n", deref, f.Name)
+	case op.UuidDecode():
+		deref := ""
+		if op.PtrAssign() {
+			deref = "*"
+		}
+		out += "b := vr.ReadBytes(vr.ReadInt32())\n"
+		out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
+		out += "if len(b) != 16 { return errors.New(\"invalid length for uuid (should be 16)\")\n}\n"
+		out += "u, err := uuid.FromBytes(b)\n"
+		out += "if err != nil {\nreturn err\n}\n"
+		out += fmt.Sprintf("%sv.%s = u.String()", deref, f.Name)
 	default:
 		var prefix, suffix string
 		if op.MaskCast() != Op(0) {
