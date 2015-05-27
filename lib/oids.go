@@ -1,6 +1,9 @@
 package pgxgen
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 var DataTypeNames = map[string]string{
 	"bool":          "Bool",
@@ -71,7 +74,7 @@ func NormalizeDataType(dataType string) string {
 		return "int8"
 	case "float4", "float(32)", "real", "float32":
 		return "real"
-	case "float8", "float(53)", "float", "double", "double precision":
+	case "float8", "float(53)", "float", "double", "double precision", "float64":
 		return "float"
 	case "varchar", "character varying":
 		return "varchar"
@@ -96,6 +99,13 @@ func NormalizeDataType(dataType string) string {
 	default:
 		if strings.HasPrefix(dataType, "varchar") || strings.HasPrefix(dataType, "character varying") {
 			return "varchar"
+		}
+		if strings.HasPrefix(dataType, "float(") {
+			width, _ := strconv.ParseInt(dataType[len("float("):len(dataType)-1], 0, 8)
+			if width >= 1 && width <= 24 {
+				return "real"
+			}
+			return "float"
 		}
 	}
 	return ""
