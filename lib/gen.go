@@ -11,6 +11,9 @@ import (
 const DRIVER = "github.com/wdamron/pgx"
 const UUID_PKG = "github.com/satori/go.uuid"
 
+const UuidOid = 2950
+const UuidArrayOid = 2951
+
 type File struct {
 	Pkg, Driver string
 	Structs     []Struct
@@ -44,9 +47,18 @@ func (f *File) gen() ([]byte, error) {
 	// Always write the header (package name, pgxgen comment):
 	out := genHeader(f)
 
+	uuidImported := false
+	uuidPkg := fmt.Sprintf(`"%s"`, UUID_PKG)
+	for _, imp := range f.File.Imports {
+		if imp.Path == uuidPkg {
+			uuidImported = true
+			break
+		}
+	}
+
 	body := ""
 	writeImports := false
-	importUuid := false
+	writeUuidImport := false
 	for _, s := range f.Structs {
 		cols := s.Columns
 		count := len(cols)
@@ -56,7 +68,11 @@ func (f *File) gen() ([]byte, error) {
 		writeImports = true
 		for _, c := range cols {
 			if c.Type == "uuid" {
-				importUuid = true
+				ftype := c.StructField.Type
+				if (ftype == "uuid.UUID" || ftype == "*uuid.UUID") && !uuidImported {
+					return nil, fmt.Errorf("package %s must be imported to use uuid column data types\n(see %s)", uuidPkg, f.File.AbsPath)
+				}
+				writeUuidImport = true
 			}
 		}
 
@@ -102,7 +118,11 @@ func (f *File) gen() ([]byte, error) {
 	}
 
 	if writeImports {
-		out += genImports(f, importUuid)
+		imports, err := genImports(f, writeUuidImport)
+		if err != nil {
+			return nil, err
+		}
+		out += imports
 	}
 
 	out += body
@@ -132,12 +152,12 @@ import (
 
 `
 
-func genImports(f *File, importUuid bool) string {
+func genImports(f *File, writeUuidImport bool) (string, error) {
 	uuidPkg := ""
-	if importUuid {
-		uuidPkg = `"` + UUID_PKG + `"`
+	if writeUuidImport {
+		uuidPkg = fmt.Sprintf(`"%s"`, UUID_PKG)
 	}
-	return fmt.Sprintf(importsFmt, uuidPkg, f.Driver)
+	return fmt.Sprintf(importsFmt, uuidPkg, f.Driver), nil
 }
 
 const tableTypeFmt = `
@@ -325,10 +345,15 @@ func genEncoderArray(s *Struct) (string, error) {
 			if op.DerefPass() {
 				deref = "*"
 			}
-			out += fmt.Sprintf("u, err := uuid.FromString(%sv.%s)\n", deref, f.Name)
-			out += "if err != nil {\nreturn err\n}\n"
-			out += "wbuf.WriteInt32(16)\n"
-			out += "wbuf.WriteBytes(u[:16])\nreturn nil\n"
+			if op.UuidStringEncode() {
+				out += fmt.Sprintf("u, err := uuid.FromString(%sv.%s)\n", deref, f.Name)
+				out += "if err != nil {\nreturn err\n}\n"
+				out += "wbuf.WriteInt32(16)\n"
+				out += "wbuf.WriteBytes(u[:16])\nreturn nil\n"
+			} else {
+				out += "wbuf.WriteInt32(16)\n"
+				out += fmt.Sprintf("wbuf.WriteBytes(%sv.%s[:16])\nreturn nil\n", deref, f.Name)
+			}
 		default:
 			var castPrefix, castSuffix string
 			if op.MaskCast() != Op(0) {
@@ -394,7 +419,10 @@ func genColumnDecoder(s *Struct, c *Column) (string, error) {
 		out += "if len(b) != 16 { return errors.New(\"invalid length for uuid (should be 16)\")\n}\n"
 		out += "u, err := uuid.FromBytes(b)\n"
 		out += "if err != nil {\nreturn err\n}\n"
-		out += fmt.Sprintf("%sv.%s = u.String()", deref, f.Name)
+		out += fmt.Sprintf("%sv.%s = u", deref, f.Name)
+		if op.UuidStringDecode() {
+			out += ".String()"
+		}
 	default:
 		var prefix, suffix string
 		if op.MaskCast() != Op(0) {
@@ -451,13 +479,14 @@ func genAliasArray(s *Struct) string {
 func genOidArray(s *Struct) string {
 	out := fmt.Sprintf("Oids: [%d]pgx.Oid{\n", len(s.Columns))
 	for _, c := range s.Columns {
-		var oidName string
-		if c.Type == "hstore" {
-			oidName = "Oid(0)"
-		} else {
-			oidName = DataTypeNames[c.Type] + "Oid"
+		switch c.Type {
+		case "hstore":
+			out += "pgx.Oid(0),\n"
+		case "uuid":
+			out += fmt.Sprintf("pgx.Oid(%d),\n", UuidOid)
+		default:
+			out += fmt.Sprintf("pgx.%sOid,\n", DataTypeNames[c.Type])
 		}
-		out += fmt.Sprintf("pgx.%s,\n", oidName)
 	}
 	return out + "},\n"
 }
@@ -479,7 +508,7 @@ func genFormatArray(s *Struct) string {
 }
 
 const rowDecoderFmt = `
-// DecodeRow decodes a SQL row into type %s.
+// DecodeRow decodes a single row/result from r into v.
 // If an error is returned, the caller should call Rows.Close()
 func (v *%s) DecodeRow(r *pgx.Rows) error {
 	for _ = range r.FieldDescriptions() {
@@ -525,7 +554,7 @@ func (v *%s) DecodeRow(r *pgx.Rows) error {
 
 // generate method def for {struct-name}.DecodeRow
 func genRowDecoder(s *Struct) string {
-	return fmt.Sprintf(rowDecoderFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name)
+	return fmt.Sprintf(rowDecoderFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name)
 }
 
 const paramsEncoderFmt = `

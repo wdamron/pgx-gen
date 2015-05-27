@@ -1,10 +1,13 @@
 package pointz
 
+import "github.com/satori/go.uuid"
+
 type Point struct {
 	X []string       `pgx:"name:x;type:varchar[]"`
 	Y *int64         `pgx:"name:y;type:int4"`
 	Z *pgx.NullInt32 `pgx:"name:z;type:integer"`
 	H *map[string]string `pgx:"name:h;type:hstore"`
-	H2 pgx.Hstore     `pgx:"name:h;type:hstore"`
-	u *string        `pgx:"name:id;type:uuid"`
+	H2 pgx.Hstore     `pgx:"name:h2;type:hstore"`
+	u string        `pgx:"name:id;type:uuid"`
+	u2 *uuid.UUID        `pgx:"name:id;type:uuid"`
 }
