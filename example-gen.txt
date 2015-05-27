@@ -207,7 +207,7 @@ func (v *Point) DecodeRow(r *pgx.Rows) error {
 
 		// Slow path:
 		index := PointTable.Index(colname)
-		if index < 0 || index > len(PointTable.Decoders)-1 {
+		if index < 0 {
 			return errors.New("column decoder for " + colname + " not found in PointTable")
 		}
 		if err := PointTable.Decoders[index](v, vr); err != nil {
@@ -237,13 +237,7 @@ func (t *PointTableType) Encoder(colnames ...string) (*PointParamsEncoder, error
 		return nil, err
 	}
 	for i, index := range indexes {
-		if index < 0 || index > len(PointTable.Formats)-1 {
-			return nil, errors.New("column format index out of range")
-		}
 		formats[i] = PointTable.Formats[index]
-		if index < 0 || index > len(PointTable.Encoders)-1 {
-			return nil, errors.New("column encoder for " + colnames[i] + " not found in PointTable")
-		}
 		encoders[i] = PointTable.Encoders[index]
 	}
 
