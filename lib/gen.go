@@ -294,15 +294,24 @@ func genEncoderArray(s *Struct) (string, error) {
 
 		out += fmt.Sprintf("// Encode (*%s).%s as %s\n", s.Name, c.StructField.Name, c.Type)
 		out += fmt.Sprintf("func(v *%s, wbuf *pgx.WriteBuf) error {\n", s.Name)
-		var castPrefix, castSuffix string
-		if op.MaskCast() != Op(0) {
-			castPrefix, castSuffix = op.FormatCast()+"(", ")"
+		if op.CustomEncode() {
+			if c.Type == "hstore" {
+				oidName = "Oid(0)"
+			} else {
+				oidName += "Oid"
+			}
+			out += fmt.Sprintf("v.%s.Encode(wbuf, pgx.%s)\n", f.Name, oidName)
+		} else {
+			var castPrefix, castSuffix string
+			if op.MaskCast() != Op(0) {
+				castPrefix, castSuffix = op.FormatCast()+"(", ")"
+			}
+			deref := ""
+			if op.DerefPass() {
+				deref = "*"
+			}
+			out += fmt.Sprintf("wbuf.Encode%s(%s%sv.%s%s)\n", oidName, castPrefix, deref, c.StructField.Name, castSuffix)
 		}
-		deref := ""
-		if op.DerefPass() {
-			deref = "*"
-		}
-		out += fmt.Sprintf("wbuf.Encode%s(%s%sv.%s%s)\n", oidName, castPrefix, deref, c.StructField.Name, castSuffix)
 		out += "return nil\n},\n"
 	}
 	return out + "},\n", nil
@@ -334,25 +343,30 @@ func genColumnDecoder(s *Struct, c *Column) (string, error) {
 	}
 	op := Decoders[coltype][f.Type]
 	if op == Op(0) {
-		return "", fmt.Errorf("no column decoder available for field: %s", f.Name)
+		return "", fmt.Errorf("no column decoder available for field: %s (coltype=%s, fieldtype=%s)", f.Name, c.Type, f.Type)
 	}
 	oidName := OidNames[coltype]
 	if oidName == "" {
-		return "", fmt.Errorf("no column decoder available for field: %s", f.Name)
+		return "", fmt.Errorf("no column oid for field: %s", f.Name)
 	}
 	// TODO(wd): check overflow, when necessary
 	out := fmt.Sprintf("// Decode column %s::%s into (*%s).%s\n", c.Name, coltype, s.Name, f.Name)
 	out += fmt.Sprintf("func(v *%s, vr *pgx.ValueReader) error {\n", s.Name)
-	var prefix, suffix string
-	if op.MaskCast() != Op(0) {
-		prefix, suffix = op.FormatCast()+"(", ")"
+	if op.CustomScan() {
+		out += fmt.Sprintf("if err := v.%s.Scan(vr); err != nil {\nreturn err\n}\n", f.Name)
+	} else {
+		var prefix, suffix string
+		if op.MaskCast() != Op(0) {
+			prefix, suffix = op.FormatCast()+"(", ")"
+		}
+		out += fmt.Sprintf("x := %svr.Decode%s()%s\n", prefix, oidName, suffix)
+		out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
+		if op.PtrAssign() {
+			out += "*"
+		}
+		out += fmt.Sprintf("v.%s = x\n", f.Name)
 	}
-	out += fmt.Sprintf("x := %svr.Decode%s()%s\n", prefix, oidName, suffix)
-	out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
-	if op.PtrAssign() {
-		out += "*"
-	}
-	out += fmt.Sprintf("v.%s = x\nreturn nil\n},\n", f.Name)
+	out += "return nil\n},\n"
 
 	return out, nil
 }
@@ -396,7 +410,13 @@ func genAliasArray(s *Struct) string {
 func genOidArray(s *Struct) string {
 	out := fmt.Sprintf("Oids: [%d]pgx.Oid{\n", len(s.Columns))
 	for _, c := range s.Columns {
-		out += fmt.Sprintf("pgx.%sOid,\n", OidNames[c.Type])
+		var oidName string
+		if c.Type == "hstore" {
+			oidName = "Oid(0)"
+		} else {
+			oidName = OidNames[c.Type] + "Oid"
+		}
+		out += fmt.Sprintf("pgx.%s,\n", oidName)
 	}
 	return out + "},\n"
 }
@@ -471,7 +491,8 @@ const paramsEncoderFmt = `
 // %sParamsEncoder encodes parameter formats and values for a prepared statement
 // to a buffer, and implements pgx.ParamsEncoder
 type %sParamsEncoder struct {
-	Formats []int
+	Indexes       []int
+	Formats       []int
 	ValueEncoders []func(v *%s, wbuf *pgx.WriteBuf)
 	v *%s
 }
@@ -506,6 +527,7 @@ func (t *%sTableType) Encoder(colnames ...string) (*%sParamsEncoder, error) {
 	
 
 	pe := &%sParamsEncoder{
+		Indexes: indexes,
 		Formats: formats,
 		ValueEncoders: encoders,
 	}
@@ -522,6 +544,7 @@ const bindValFmt = `
 // Bind binds value v to pe, returning a pgx.ParamsEncoder for use within raw queries
 func (pe %sParamsEncoder) Bind(v *%s) pgx.ParamsEncoder {
 	return &%sParamsEncoder{
+		Indexes: pe.Indexes,
 		Formats: pe.Formats,
 		ValueEncoders: pe.ValueEncoders,
 		v: v,
@@ -538,8 +561,15 @@ const encodeParamFormatsFmt = `
 // EncodeParamFormats encodes param formats into wbuf, as part of a raw query
 // (%sParamsEncoder should implement pgx.ParamsEncoder)
 func (pe *%sParamsEncoder) EncodeParamFormats(ps *pgx.PreparedStatement, wbuf *pgx.WriteBuf) error {
-	for _, format := range pe.Formats {
-		wbuf.WriteInt16(int16(format))
+	if len(ps.ParameterOids) != len(pe.Formats) {
+		return errors.New("param count of encoder and prepared statement do not match")
+	}
+	for i, oid := range ps.ParameterOids {
+		foundOid := %sTable.Oids[pe.Indexes[i]]
+		if oid != foundOid && foundOid != pgx.Oid(0) {
+			return errors.New("param oids of encoder and prepared statement do not match")
+		}
+		wbuf.WriteInt16(int16(pe.Formats[i]))
 	}
 	return nil
 }
@@ -548,7 +578,7 @@ func (pe *%sParamsEncoder) EncodeParamFormats(ps *pgx.PreparedStatement, wbuf *p
 
 // generate method def for {struct-name}ParamsEncoder.EncodeParamFormats
 func genEncodeParamFormats(s *Struct) string {
-	return fmt.Sprintf(encodeParamFormatsFmt, s.Name, s.Name)
+	return fmt.Sprintf(encodeParamFormatsFmt, s.Name, s.Name, s.Name)
 }
 
 const encodeParamsFmt = `

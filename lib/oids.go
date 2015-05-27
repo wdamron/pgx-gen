@@ -23,6 +23,7 @@ var OidNames = map[string]string{
 	"[]varchar":     "VarcharArray",
 	"[]timestamp":   "TimestampArray",
 	"[]timestampTz": "TimestampTzArray",
+	"hstore":        "Hstore",
 }
 
 var BinaryFmtOids = map[string]bool{

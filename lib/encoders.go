@@ -1,188 +1,254 @@
 package pgxgen
 
 var Encoders = map[string]OpMap{
-	"bool": OpMap{
+	"bool": {
 		"bool": OpPass,
 	},
-	"*bool": OpMap{
+	"*bool": {
 		"bool": OpDerefPass,
 	},
-	"int": OpMap{
+	"int": {
 		"int2": OpPass | OpCastInt16 | OpCheckOverflow,
 		"int4": OpPass | OpCastInt32 | OpCheckOverflow,
 		"int8": OpPass | OpCastInt64,
 	},
-	"*int": OpMap{
+	"*int": {
 		"int2": OpDerefPass | OpCastInt16 | OpCheckOverflow,
 		"int4": OpDerefPass | OpCastInt32 | OpCheckOverflow,
 		"int8": OpDerefPass | OpCastInt64,
 	},
-	"uint": OpMap{
+	"uint": {
 		"int2": OpPass | OpCastInt16 | OpCheckOverflow,
 		"int4": OpPass | OpCastInt32 | OpCheckOverflow,
 		"int8": OpPass | OpCastInt64 | OpCheckOverflow,
 	},
-	"*uint": OpMap{
+	"*uint": {
 		"int2": OpDerefPass | OpCastInt16 | OpCheckOverflow,
 		"int4": OpDerefPass | OpCastInt32 | OpCheckOverflow,
 		"int8": OpDerefPass | OpCastInt64 | OpCheckOverflow,
 	},
-	"int16": OpMap{
+	"int16": {
 		"int2": OpPass,
 		"int4": OpPass | OpCastInt32,
 		"int8": OpPass | OpCastInt64,
 	},
-	"*int16": OpMap{
+	"*int16": {
 		"int2": OpDerefPass,
 		"int4": OpDerefPass | OpCastInt32,
 		"int8": OpDerefPass | OpCastInt64,
 	},
-	"uint16": OpMap{
+	"uint16": {
 		"int2": OpPass | OpCastInt16 | OpCheckOverflow,
 		"int4": OpPass | OpCastInt32,
 		"int8": OpPass | OpCastInt64,
 	},
-	"*uint16": OpMap{
+	"*uint16": {
 		"int2": OpDerefPass | OpCastInt16 | OpCheckOverflow,
 		"int4": OpDerefPass | OpCastInt32,
 		"int8": OpDerefPass | OpCastInt64,
 	},
-	"int32": OpMap{
+	"int32": {
 		"int2": OpPass | OpCastInt16 | OpCheckOverflow,
 		"int4": OpPass,
 		"int8": OpPass | OpCastInt64,
 	},
-	"*int32": OpMap{
+	"*int32": {
 		"int2": OpDerefPass | OpCastInt16 | OpCheckOverflow,
 		"int4": OpDerefPass,
 		"int8": OpDerefPass | OpCastInt64,
 	},
-	"uint32": OpMap{
+	"uint32": {
 		"int2": OpPass | OpCastInt16 | OpCheckOverflow,
 		"int4": OpPass | OpCastInt32 | OpCheckOverflow,
 		"int8": OpPass | OpCastInt64,
 	},
-	"*uint32": OpMap{
+	"*uint32": {
 		"int2": OpDerefPass | OpCastInt16 | OpCheckOverflow,
 		"int4": OpDerefPass | OpCastInt32 | OpCheckOverflow,
 		"int8": OpDerefPass | OpCastInt64,
 	},
-	"int64": OpMap{
+	"int64": {
 		"int2": OpPass | OpCastInt16 | OpCheckOverflow,
 		"int4": OpPass | OpCastInt32 | OpCheckOverflow,
 		"int8": OpPass,
 	},
-	"*int64": OpMap{
+	"*int64": {
 		"int2": OpDerefPass | OpCastInt16 | OpCheckOverflow,
 		"int4": OpDerefPass | OpCastInt32 | OpCheckOverflow,
 		"int8": OpDerefPass,
 	},
-	"uint64": OpMap{
+	"uint64": {
 		"int2": OpPass | OpCastInt16 | OpCheckOverflow,
 		"int4": OpPass | OpCastInt32 | OpCheckOverflow,
 		"int8": OpPass | OpCastInt64 | OpCheckOverflow,
 	},
-	"*uint64": OpMap{
+	"*uint64": {
 		"int2": OpDerefPass | OpCastInt16 | OpCheckOverflow,
 		"int4": OpDerefPass | OpCastInt32 | OpCheckOverflow,
 		"int8": OpDerefPass | OpCastInt64 | OpCheckOverflow,
 	},
-	"float32": OpMap{
+	"float32": {
 		"float4": OpPass,
 		"float8": OpPass | OpCastFloat64,
 	},
-	"*float32": OpMap{
+	"*float32": {
 		"float4": OpDerefPass,
 		"float8": OpDerefPass | OpCastFloat64,
 	},
-	"float64": OpMap{
+	"float64": {
 		"float4": OpPass | OpCastFloat32 | OpCheckOverflow,
 		"float8": OpPass,
 	},
-	"*float64": OpMap{
+	"*float64": {
 		"float4": OpDerefPass | OpCastFloat32 | OpCheckOverflow,
 		"float8": OpDerefPass,
 	},
-	"string": OpMap{
+	"string": {
 		"bytea":   OpPass | OpCastBytes,
 		"text":    OpPass,
 		"varchar": OpPass,
 	},
-	"*string": OpMap{
+	"*string": {
 		"bytea":   OpDerefPass | OpCastBytes,
 		"text":    OpDerefPass,
 		"varchar": OpDerefPass,
 	},
-	"[]byte": OpMap{
+	"[]byte": {
 		"bytea":   OpPass,
 		"text":    OpPass | OpCastString,
 		"varchar": OpPass | OpCastString,
 	},
-	"*[]byte": OpMap{
+	"*[]byte": {
 		"bytea":   OpDerefPass,
 		"text":    OpDerefPass | OpCastString,
 		"varchar": OpDerefPass | OpCastString,
 	},
-	"time.Time": OpMap{
+	"time.Time": {
 		"date":        OpPass,
 		"timestamp":   OpPass,
 		"timestampTz": OpPass,
 	},
-	"*time.Time": OpMap{
+	"*time.Time": {
 		"date":        OpDerefPass,
 		"timestamp":   OpDerefPass,
 		"timestampTz": OpDerefPass,
 	},
-	"[]bool": OpMap{
+	"[]bool": {
 		"[]bool": OpPass,
 	},
-	"*[]bool": OpMap{
+	"*[]bool": {
 		"[]bool": OpDerefPass,
 	},
-	"[]int16": OpMap{
+	"[]int16": {
 		"[]int2": OpPass,
 	},
-	"*[]int16": OpMap{
+	"*[]int16": {
 		"[]int2": OpPass,
 	},
-	"[]int32": OpMap{
+	"[]int32": {
 		"[]int4": OpPass,
 	},
-	"*[]int32": OpMap{
+	"*[]int32": {
 		"[]int4": OpDerefPass,
 	},
-	"[]int64": OpMap{
+	"[]int64": {
 		"[]int8": OpPass,
 	},
-	"*[]int64": OpMap{
+	"*[]int64": {
 		"[]int8": OpDerefPass,
 	},
-	"[]float32": OpMap{
+	"[]float32": {
 		"[]float4": OpPass,
 	},
-	"*[]float32": OpMap{
+	"*[]float32": {
 		"[]float4": OpDerefPass,
 	},
-	"[]float64": OpMap{
+	"[]float64": {
 		"[]float8": OpPass,
 	},
-	"*[]float64": OpMap{
+	"*[]float64": {
 		"[]float8": OpDerefPass,
 	},
-	"[]string": OpMap{
+	"[]string": {
 		"[]text":    OpPass,
 		"[]varchar": OpPass,
 	},
-	"*[]string": OpMap{
+	"*[]string": {
 		"[]text":    OpDerefPass,
 		"[]varchar": OpDerefPass,
 	},
-	"[]time.Time": OpMap{
+	"[]time.Time": {
 		"[]timestamp":   OpPass,
 		"[]timestampTz": OpPass,
 	},
-	"*[]time.Time": OpMap{
+	"*[]time.Time": {
 		"[]timestamp":   OpPass,
 		"[]timestampTz": OpPass,
+	},
+
+	// pgx built-in encoders:
+	"pgx.Hstore": {
+		"hstore": OpCustomEncode,
+	},
+	"*pgx.Hstore": {
+		"hstore": OpCustomEncode,
+	},
+	"pgx.NullBool": {
+		"bool": OpCustomEncode,
+	},
+	"*pgx.NullBool": {
+		"bool": OpCustomEncode,
+	},
+	"pgx.NullInt16": {
+		"int2": OpCustomEncode,
+	},
+	"*pgx.NullInt16": {
+		"int2": OpCustomEncode,
+	},
+	"pgx.NullInt32": {
+		"int4": OpCustomEncode,
+	},
+	"*pgx.NullInt32": {
+		"int4": OpCustomEncode,
+	},
+	"pgx.NullInt64": {
+		"int8": OpCustomEncode,
+	},
+	"*pgx.NullInt64": {
+		"int8": OpCustomEncode,
+	},
+	"pgx.NullFloat32": {
+		"float4": OpCustomEncode,
+	},
+	"*pgx.NullFloat32": {
+		"float4": OpCustomEncode,
+	},
+	"pgx.NullFloat64": {
+		"float8": OpCustomEncode,
+	},
+	"*pgx.NullFloat64": {
+		"float8": OpCustomEncode,
+	},
+	"pgx.NullString": {
+		"text":    OpCustomEncode,
+		"varchar": OpCustomEncode,
+	},
+	"*pgx.NullString": {
+		"text":    OpCustomEncode,
+		"varchar": OpCustomEncode,
+	},
+	"pgx.NullTime": {
+		"timestamp":   OpCustomEncode,
+		"timestampTz": OpCustomEncode,
+	},
+	"*pgx.NullTime": {
+		"timestamp":   OpCustomEncode,
+		"timestampTz": OpCustomEncode,
+	},
+	"pgx.NullHstore": {
+		"hstore": OpCustomEncode,
+	},
+	"*pgx.NullHstore": {
+		"hstore": OpCustomEncode,
 	},
 }
