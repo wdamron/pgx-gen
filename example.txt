@@ -1,8 +1,9 @@
 package pointz
 
 type Point struct {
-	X []string       `pgx:"name:x;type:[]varchar"`
+	X []string       `pgx:"name:x;type:varchar[]"`
 	Y *int64         `pgx:"name:y;type:int4"`
-	Z *pgx.NullInt32 `pgx:"name:z;type:int4"`
-	H pgx.Hstore     `pgx:"name:h;type:hstore"`
+	Z *pgx.NullInt32 `pgx:"name:z;type:integer"`
+	H *map[string]string `pgx:"name:h;type:hstore"`
+	H2 pgx.Hstore     `pgx:"name:h;type:hstore"`
 }

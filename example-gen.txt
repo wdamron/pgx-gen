@@ -14,28 +14,28 @@ import (
 type PointTableType struct {
 	// Encoders can be used to encode a single param value from type Point
 	// into a write buffer, as part of a raw query
-	Encoders [4]func(*Point, *pgx.WriteBuf) error
+	Encoders [5]func(*Point, *pgx.WriteBuf) error
 	// Decoders can be used to decode a single column value from a
 	// pgx.ValueReader into type Point
-	Decoders [4]func(*Point, *pgx.ValueReader) error
+	Decoders [5]func(*Point, *pgx.ValueReader) error
 	// Names contains an ordered list of column names
-	Names [4]string
+	Names [5]string
 	// Types contains an ordered list of column types
-	Types [4]string
+	Types [5]string
 	// Aliases contains an ordered list of column names aliased as hex-encoded
 	// indexes, for faster look-ups during decoding
-	Aliases [4]string
+	Aliases [5]string
 	// Formats contains an ordered list of column format codes (text=0, binary=1)
-	Formats [4]int
+	Formats [5]int
 	// Oids contains an ordered list of column oid codes (corresponding with
 	// Postgres types)
-	Oids [4]pgx.Oid
+	Oids [5]pgx.Oid
 }
 
 // PointTable describes the table corresponding with type Point
 var PointTable = PointTableType{
-	Encoders: [4]func(*Point, *pgx.WriteBuf) error{
-		// Encode (*Point).X as []varchar
+	Encoders: [5]func(*Point, *pgx.WriteBuf) error{
+		// Encode (*Point).X as varchar[]
 		func(v *Point, wbuf *pgx.WriteBuf) error {
 			wbuf.EncodeVarcharArray(v.X)
 			return nil
@@ -47,17 +47,19 @@ var PointTable = PointTableType{
 		},
 		// Encode (*Point).Z as int4
 		func(v *Point, wbuf *pgx.WriteBuf) error {
-			v.Z.Encode(wbuf, pgx.Int4Oid)
-			return nil
+			return v.Z.Encode(wbuf, pgx.Int4Oid)
 		},
 		// Encode (*Point).H as hstore
 		func(v *Point, wbuf *pgx.WriteBuf) error {
-			v.H.Encode(wbuf, pgx.Oid(0))
-			return nil
+			return pgx.Hstore(*v.H).Encode(wbuf, pgx.Oid(0))
+		},
+		// Encode (*Point).H2 as hstore
+		func(v *Point, wbuf *pgx.WriteBuf) error {
+			return v.H2.Encode(wbuf, pgx.Oid(0))
 		},
 	},
-	Decoders: [4]func(*Point, *pgx.ValueReader) error{
-		// Decode column x::[]varchar into (*Point).X
+	Decoders: [5]func(*Point, *pgx.ValueReader) error{
+		// Decode column x::varchar[] into (*Point).X
 		func(v *Point, vr *pgx.ValueReader) error {
 			x := vr.DecodeVarcharArray()
 			if vr.Err() != nil {
@@ -77,44 +79,46 @@ var PointTable = PointTableType{
 		},
 		// Decode column z::int4 into (*Point).Z
 		func(v *Point, vr *pgx.ValueReader) error {
-			if err := v.Z.Scan(vr); err != nil {
-				return err
-			}
-			return nil
+			return v.Z.Scan(vr)
 		},
 		// Decode column h::hstore into (*Point).H
 		func(v *Point, vr *pgx.ValueReader) error {
-			if err := v.H.Scan(vr); err != nil {
-				return err
-			}
-			return nil
+			return pgx.Hstore(*v.H).Scan(vr)
+		},
+		// Decode column h::hstore into (*Point).H2
+		func(v *Point, vr *pgx.ValueReader) error {
+			return v.H2.Scan(vr)
 		},
 	},
-	Names: [4]string{
+	Names: [5]string{
 		"x",
 		"y",
 		"z",
 		"h",
+		"h",
 	},
-	Types: [4]string{
-		"[]varchar",
+	Types: [5]string{
+		"varchar[]",
 		"int4",
 		"int4",
+		"hstore",
 		"hstore",
 	},
 	// Aliases contains an ordered list of column names aliased as hex-encoded
 	// indexes, for faster look-ups during decoding
-	Aliases: [4]string{
-		"x as __00::[]varchar",
+	Aliases: [5]string{
+		"x as __00::varchar[]",
 		"y as __01::int4",
 		"z as __02::int4",
 		"h as __03::hstore",
+		"h as __04::hstore",
 	},
-	Formats: [4]int{1, 1, 1, 0},
-	Oids: [4]pgx.Oid{
+	Formats: [5]int{1, 1, 1, 0, 0},
+	Oids: [5]pgx.Oid{
 		pgx.VarcharArrayOid,
 		pgx.Int4Oid,
 		pgx.Int4Oid,
+		pgx.Oid(0),
 		pgx.Oid(0),
 	},
 }
@@ -131,6 +135,8 @@ func (t *PointTableType) Index(colname string) int {
 		return 2
 	case "h":
 		return 3
+	case "h":
+		return 4
 	}
 	return -1
 }
@@ -157,7 +163,7 @@ func (t *PointTableType) Aliases(colnames ...string) ([]string, error) {
 	aliases := []string{}
 	// If no columns are specified, alias all columns:
 	if len(cols) == 0 {
-		return PointTable.Aliases[:4], nil
+		return PointTable.Aliases[:5], nil
 	}
 	indexes, err := PointTable.Indexes(colnames...)
 	if err != nil {
@@ -172,7 +178,7 @@ func (t *PointTableType) Aliases(colnames ...string) ([]string, error) {
 // AliasAll aliases column names as hex-encoded indexes, for faster look-ups
 // during decoding
 func (t *PointTableType) AliasAll() string {
-	return "x as __00::[]varchar, y as __01::int4, z as __02::int4, h as __03::hstore"
+	return "x as __00::varchar[], y as __01::int4, z as __02::int4, h as __03::hstore, h as __04::hstore"
 }
 
 // DecodeRow decodes a SQL row into type Point.
@@ -226,6 +232,9 @@ type PointParamsEncoder struct {
 	v             *Point
 }
 
+// PointParamsEncoder should implement pgx.ParamsEncoder
+var _ pgx.ParamsEncoder = (*PointParamsEncoder)(nil)
+
 // Encoder creates an unbound instance of type PointParamsEncoder
 // for the columns/fields named by colnames
 func (t *PointTableType) Encoder(colnames ...string) (*PointParamsEncoder, error) {
@@ -260,7 +269,6 @@ func (pe PointParamsEncoder) Bind(v *Point) pgx.ParamsEncoder {
 }
 
 // EncodeParamFormats encodes param formats into wbuf, as part of a raw query
-// (PointParamsEncoder should implement pgx.ParamsEncoder)
 func (pe *PointParamsEncoder) EncodeParamFormats(ps *pgx.PreparedStatement, wbuf *pgx.WriteBuf) error {
 	if len(ps.ParameterOids) != len(pe.Formats) {
 		return errors.New("param count of encoder and prepared statement do not match")
@@ -276,7 +284,6 @@ func (pe *PointParamsEncoder) EncodeParamFormats(ps *pgx.PreparedStatement, wbuf
 }
 
 // EncodeParams encodes the param values into wbuf, as part of a raw query
-// (PointParamsEncoder should implement pgx.ParamsEncoder)
 func (pe *PointParamsEncoder) EncodeParams(ps *pgx.PreparedStatement, wbuf *pgx.WriteBuf) error {
 	for _, enc := range pe.ValueEncoders {
 		enc(pe.v, wbuf)

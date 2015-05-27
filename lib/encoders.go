@@ -88,20 +88,20 @@ var Encoders = map[string]OpMap{
 		"int8": OpDerefPass | OpCastInt64 | OpCheckOverflow,
 	},
 	"float32": {
-		"float4": OpPass,
-		"float8": OpPass | OpCastFloat64,
+		"real":  OpPass,
+		"float": OpPass | OpCastFloat64,
 	},
 	"*float32": {
-		"float4": OpDerefPass,
-		"float8": OpDerefPass | OpCastFloat64,
+		"real":  OpDerefPass,
+		"float": OpDerefPass | OpCastFloat64,
 	},
 	"float64": {
-		"float4": OpPass | OpCastFloat32 | OpCheckOverflow,
-		"float8": OpPass,
+		"real":  OpPass | OpCastFloat32 | OpCheckOverflow,
+		"float": OpPass,
 	},
 	"*float64": {
-		"float4": OpDerefPass | OpCastFloat32 | OpCheckOverflow,
-		"float8": OpDerefPass,
+		"real":  OpDerefPass | OpCastFloat32 | OpCheckOverflow,
+		"float": OpDerefPass,
 	},
 	"string": {
 		"bytea":   OpPass | OpCastBytes,
@@ -134,56 +134,56 @@ var Encoders = map[string]OpMap{
 		"timestampTz": OpDerefPass,
 	},
 	"[]bool": {
-		"[]bool": OpPass,
+		"bool[]": OpPass,
 	},
 	"*[]bool": {
-		"[]bool": OpDerefPass,
+		"bool[]": OpDerefPass,
 	},
 	"[]int16": {
-		"[]int2": OpPass,
+		"int2[]": OpPass,
 	},
 	"*[]int16": {
-		"[]int2": OpPass,
+		"int2[]": OpPass,
 	},
 	"[]int32": {
-		"[]int4": OpPass,
+		"int4[]": OpPass,
 	},
 	"*[]int32": {
-		"[]int4": OpDerefPass,
+		"int4[]": OpDerefPass,
 	},
 	"[]int64": {
-		"[]int8": OpPass,
+		"int8[]": OpPass,
 	},
 	"*[]int64": {
-		"[]int8": OpDerefPass,
+		"int8[]": OpDerefPass,
 	},
 	"[]float32": {
-		"[]float4": OpPass,
+		"real[]": OpPass,
 	},
 	"*[]float32": {
-		"[]float4": OpDerefPass,
+		"real[]": OpDerefPass,
 	},
 	"[]float64": {
-		"[]float8": OpPass,
+		"float[]": OpPass,
 	},
 	"*[]float64": {
-		"[]float8": OpDerefPass,
+		"float[]": OpDerefPass,
 	},
 	"[]string": {
-		"[]text":    OpPass,
-		"[]varchar": OpPass,
+		"text[]":    OpPass,
+		"varchar[]": OpPass,
 	},
 	"*[]string": {
-		"[]text":    OpDerefPass,
-		"[]varchar": OpDerefPass,
+		"text[]":    OpDerefPass,
+		"varchar[]": OpDerefPass,
 	},
 	"[]time.Time": {
-		"[]timestamp":   OpPass,
-		"[]timestampTz": OpPass,
+		"timestamp[]":   OpPass,
+		"timestampTz[]": OpPass,
 	},
 	"*[]time.Time": {
-		"[]timestamp":   OpPass,
-		"[]timestampTz": OpPass,
+		"timestamp[]":   OpPass,
+		"timestampTz[]": OpPass,
 	},
 
 	// pgx built-in encoders:
@@ -218,16 +218,16 @@ var Encoders = map[string]OpMap{
 		"int8": OpCustomEncode,
 	},
 	"pgx.NullFloat32": {
-		"float4": OpCustomEncode,
+		"real": OpCustomEncode,
 	},
 	"*pgx.NullFloat32": {
-		"float4": OpCustomEncode,
+		"real": OpCustomEncode,
 	},
 	"pgx.NullFloat64": {
-		"float8": OpCustomEncode,
+		"float": OpCustomEncode,
 	},
 	"*pgx.NullFloat64": {
-		"float8": OpCustomEncode,
+		"float": OpCustomEncode,
 	},
 	"pgx.NullString": {
 		"text":    OpCustomEncode,
@@ -250,5 +250,13 @@ var Encoders = map[string]OpMap{
 	},
 	"*pgx.NullHstore": {
 		"hstore": OpCustomEncode,
+	},
+
+	// wrappers around pgx built-in encoders:
+	"map[string]string": {
+		"hstore": OpHstoreMapEncode,
+	},
+	"*map[string]string": {
+		"hstore": OpDerefPass | OpHstoreMapEncode,
 	},
 }
