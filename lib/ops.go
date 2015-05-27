@@ -4,21 +4,19 @@ type Op uint64
 
 type OpMap map[string]Op
 
-// Flags
-// * Low 56 bits of the Op
-// * Up to 56 available
+// The low 56 bits of an Op are reserved for flags. Up to 56 flags may be defined.
 const (
 	OpAssign Op = 1 << iota
 	OpPtrAssign
 	OpPass
 	OpDerefPass
+	OpCustomScan
+	OpCustomEncode
 	OpCheckOverflow
 )
 
-// Casts
-// * Mutually exclusive
-// * High 8 bits of the Op
-// * Up to 256 available
+// The high 8 bits of an op are reserved for the Op's cast type (if any).
+// Casts are mutually exclusive, and up to 256 different cast types may be defined.
 const (
 	OpCastString Op = iota << 56
 	OpCastBytes
@@ -59,6 +57,14 @@ func (op Op) Pass() bool {
 
 func (op Op) DerefPass() bool {
 	return op&OpDerefPass != 0
+}
+
+func (op Op) CustomScan() bool {
+	return op&OpCustomScan != 0
+}
+
+func (op Op) CustomEncode() bool {
+	return op&OpCustomEncode != 0
 }
 
 func (op Op) CheckOverflow() bool {
