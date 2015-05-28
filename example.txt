@@ -9,5 +9,8 @@ type Point struct {
 	H *map[string]string `pgx:"name:h;type:hstore"`
 	H2 pgx.Hstore     `pgx:"name:h2;type:hstore"`
 	u string        `pgx:"name:id;type:uuid"`
-	u2 *uuid.UUID        `pgx:"name:id;type:uuid"`
+	u2 *uuid.UUID        `pgx:"name:id2;type:uuid"`
+	j *string        `pgx:"name:j;type:json"`
+	j2 map[string]int `pgx:"name:j2;type:json"`
+	j3 []byte `pgx:"name:j3;type:json"`
 }
