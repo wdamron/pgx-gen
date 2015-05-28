@@ -11,8 +11,10 @@ import (
 const DRIVER = "github.com/wdamron/pgx"
 const UUID_PKG = "github.com/satori/go.uuid"
 
-const UuidOid = 2950
-const UuidArrayOid = 2951
+const JSON_OID = 114
+const XML_OID = 142
+const UUID_OID = 2950
+const UUID_ARRAY_OID = 2951
 
 type File struct {
 	Pkg, Driver string
@@ -39,7 +41,6 @@ func (f *File) Gen() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return format.Source(out)
 }
 
@@ -316,7 +317,7 @@ func genEncoderArray(s *Struct) (string, error) {
 	for _, c := range s.Columns {
 		f := c.StructField
 		op := c.EncodeOp
-		if op == Op(0) {
+		if op == Op(0) && c.Type != "json" {
 			return "", fmt.Errorf("no column encoder available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
 		}
 		oidName := DataTypeNames[c.Type]
@@ -349,21 +350,50 @@ func genEncoderArray(s *Struct) (string, error) {
 				out += fmt.Sprintf("u, err := uuid.FromString(%sv.%s)\n", deref, f.Name)
 				out += "if err != nil {\nreturn err\n}\n"
 				out += "wbuf.WriteInt32(16)\n"
-				out += "wbuf.WriteBytes(u[:16])\nreturn nil\n"
+				out += "wbuf.WriteBytes(u[:16])\n"
+				out += "return nil\n"
 			} else {
 				out += "wbuf.WriteInt32(16)\n"
-				out += fmt.Sprintf("wbuf.WriteBytes(%sv.%s[:16])\nreturn nil\n", deref, f.Name)
+				out += fmt.Sprintf("wbuf.WriteBytes(%sv.%s[:16])\n", deref, f.Name)
+				out += "return nil\n"
 			}
 		default:
-			var castPrefix, castSuffix string
-			if op.MaskCast() != Op(0) {
-				castPrefix, castSuffix = op.FormatCast()+"(", ")"
+			if c.Type == "json" {
+				switch f.Type {
+				case "string", "*string":
+					deref := ""
+					if f.Type[0] == '*' {
+						deref = "*"
+					}
+					out += fmt.Sprintf("wbuf.EncodeText(%sv.%s)\n", deref, f.Name)
+					out += "return nil\n"
+				case "[]byte", "*[]byte":
+					deref := ""
+					if f.Type[0] == '*' {
+						deref = "*"
+					}
+					out += fmt.Sprintf("wbuf.WriteInt32(int32(len(%sv.%s)))\n", deref, f.Name)
+					out += fmt.Sprintf("wbuf.WriteBytes(%sv.%s)\n", deref, f.Name)
+					out += "return nil\n"
+				default:
+					out += fmt.Sprintf("b, err := json.Marshal(v.%s)\n", f.Name)
+					out += "if err != nil {\nreturn err\n}\n"
+					out += "wbuf.WriteInt32(int32(len(b)))\n"
+					out += "wbuf.WriteBytes(b)\n"
+					out += "return nil\n"
+				}
+			} else {
+				var castPrefix, castSuffix string
+				if op.MaskCast() != Op(0) {
+					castPrefix, castSuffix = op.FormatCast()+"(", ")"
+				}
+				deref := ""
+				if op.DerefPass() {
+					deref = "*"
+				}
+				out += fmt.Sprintf("wbuf.Encode%s(%s%sv.%s%s)\n", oidName, castPrefix, deref, c.StructField.Name, castSuffix)
+				out += "return nil\n"
 			}
-			deref := ""
-			if op.DerefPass() {
-				deref = "*"
-			}
-			out += fmt.Sprintf("wbuf.Encode%s(%s%sv.%s%s)\nreturn nil\n", oidName, castPrefix, deref, c.StructField.Name, castSuffix)
 		}
 		out += "},\n"
 	}
@@ -389,7 +419,7 @@ func genColumnDecoder(s *Struct, c *Column) (string, error) {
 	f := c.StructField
 	coltype := c.Type
 	op := c.DecodeOp
-	if op == Op(0) {
+	if op == Op(0) && c.Type != "json" {
 		return "", fmt.Errorf("no column decoder available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
 	}
 	dtName := DataTypeNames[coltype]
@@ -423,17 +453,51 @@ func genColumnDecoder(s *Struct, c *Column) (string, error) {
 		if op.UuidStringDecode() {
 			out += ".String()"
 		}
+		out += "\nreturn nil\n"
 	default:
-		var prefix, suffix string
-		if op.MaskCast() != Op(0) {
-			prefix, suffix = op.FormatCast()+"(", ")"
+		if c.Type == "json" {
+			switch f.Type {
+			case "string", "*string":
+				out += "s := vr.ReadString(vr.ReadInt32())\n"
+				out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
+				deref := ""
+				if f.Type[0] == '*' {
+					deref = "*"
+				}
+				out += fmt.Sprintf("%sv.%s = s\n", deref, f.Name)
+				out += "return nil\n"
+			case "[]byte", "*[]byte":
+				out += "b := vr.ReadBytes(vr.ReadInt32())\n"
+				out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
+				deref := ""
+				if f.Type[0] == '*' {
+					deref = "*"
+				}
+				out += fmt.Sprintf("%sv.%s = b\n", deref, f.Name)
+				out += "return nil\n"
+			default:
+				out += "b := vr.ReadBytes(vr.ReadInt32())\n"
+				out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
+				takeAddr := ""
+				if f.Type[0] != '*' {
+					takeAddr = "&"
+				}
+				out += fmt.Sprintf("return json.Unmarshal(b, %sv.%s)", takeAddr, f.Name)
+			}
+		} else {
+			var prefix, suffix string
+			if op.MaskCast() != Op(0) {
+				prefix, suffix = op.FormatCast()+"(", ")"
+			}
+			out += fmt.Sprintf("x := %svr.Decode%s()%s\n", prefix, dtName, suffix)
+			out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
+			deref := ""
+			if op.PtrAssign() {
+				deref = "*"
+			}
+			out += fmt.Sprintf("%sv.%s = x\n", deref, f.Name)
+			out += "return nil\n"
 		}
-		out += fmt.Sprintf("x := %svr.Decode%s()%s\n", prefix, dtName, suffix)
-		out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
-		if op.PtrAssign() {
-			out += "*"
-		}
-		out += fmt.Sprintf("v.%s = x\nreturn nil\n", f.Name)
 	}
 	out += "},\n"
 
@@ -482,8 +546,10 @@ func genOidArray(s *Struct) string {
 		switch c.Type {
 		case "hstore":
 			out += "pgx.Oid(0),\n"
+		case "json":
+			out += fmt.Sprintf("pgx.Oid(%d),\n", JSON_OID)
 		case "uuid":
-			out += fmt.Sprintf("pgx.Oid(%d),\n", UuidOid)
+			out += fmt.Sprintf("pgx.Oid(%d),\n", UUID_OID)
 		default:
 			out += fmt.Sprintf("pgx.%sOid,\n", DataTypeNames[c.Type])
 		}
