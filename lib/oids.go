@@ -5,6 +5,17 @@ import (
 	"strings"
 )
 
+const (
+	JSONOid = 114
+	// json[] data types are not currently supported
+	JSONArrayOid = 199
+	UUIDOid      = 2950
+	// uuid[] data types are not currently supported
+	UUIDArrayOid = 2951
+	// xml data types are not currently supported
+	XMLOid = 142
+)
+
 var DataTypeNames = map[string]string{
 	"bool":          "Bool",
 	"int2":          "Int2",
@@ -55,6 +66,7 @@ var BinaryDataTypes = map[string]bool{
 	"TextArray":        true,
 	"VarcharArray":     true,
 	"Oid":              true,
+	"Uuid":             true,
 }
 
 func NormalizeDataType(dataType string) string {

@@ -11,17 +11,14 @@ import (
 const DRIVER = "github.com/wdamron/pgx"
 const UUID_PKG = "github.com/satori/go.uuid"
 
-const JSON_OID = 114
-const XML_OID = 142
-const UUID_OID = 2950
-const UUID_ARRAY_OID = 2951
-
+// type File holds information extracted from a Go source file
 type File struct {
 	Pkg, Driver string
 	Structs     []Struct
 	File        *astx.File
 }
 
+// NewFile extracts information from f into a new File.
 func NewFile(f *astx.File) *File {
 	structs := make([]Struct, 0, len(f.Structs))
 	for _, astStruct := range f.Structs {
@@ -36,6 +33,8 @@ func NewFile(f *astx.File) *File {
 	}
 }
 
+// Gen generates and formats code for f, returning bytes or nil if an error has
+// occurred
 func (f *File) Gen() ([]byte, error) {
 	out, err := f.gen()
 	if err != nil {
@@ -57,23 +56,38 @@ func (f *File) gen() ([]byte, error) {
 		}
 	}
 
-	body := ""
-	writeImports := false
-	writeUuidImport := false
+	// stdImports/otherImports contain mappings from paths to names for imports:
+	var stdImports, otherImports = make(map[string]string, 0), make(map[string]string, 0)
+	var body string
 	for _, s := range f.Structs {
 		cols := s.Columns
 		count := len(cols)
 		if count == 0 {
 			continue
 		}
-		writeImports = true
+
+		// ensure std packages are imported when columns are present:
+		stdImports["errors"] = ""
+		stdImports["encoding/hex"] = ""
+		// ensure driver is imported when columns are present:
+		otherImports[f.Driver] = ""
+
 		for _, c := range cols {
-			if c.Type == "uuid" {
+			switch c.Type {
+			case "uuid":
 				ftype := c.StructField.Type
 				if (ftype == "uuid.UUID" || ftype == "*uuid.UUID") && !uuidImported {
 					return nil, fmt.Errorf("package %s must be imported to use uuid column data types\n(see %s)", uuidPkg, f.File.AbsPath)
 				}
-				writeUuidImport = true
+				otherImports[UUID_PKG] = ""
+			case "json":
+				switch c.StructField.Type {
+				// include json package when encoding/decoding Go types:
+				default:
+					stdImports["encoding/json"] = ""
+				// json is not encoded/decoded for string and []byte types:
+				case "string", "*string", "[]byte", "*[]byte":
+				}
 			}
 		}
 
@@ -118,14 +132,7 @@ func (f *File) gen() ([]byte, error) {
 		body += genEncodeParams(&s)
 	}
 
-	if writeImports {
-		imports, err := genImports(f, writeUuidImport)
-		if err != nil {
-			return nil, err
-		}
-		out += imports
-	}
-
+	out += genImports(f, stdImports, otherImports)
 	out += body
 
 	return []byte(out), nil
@@ -142,23 +149,25 @@ func genHeader(f *File) string {
 	return fmt.Sprintf(headerFmt, f.Pkg, f.File.Path)
 }
 
-const importsFmt = `
-import (
-	"errors"
-	"encoding/hex"
-	
-	%s
-	"%s"
-)
-
-`
-
-func genImports(f *File, writeUuidImport bool) (string, error) {
-	uuidPkg := ""
-	if writeUuidImport {
-		uuidPkg = fmt.Sprintf(`"%s"`, UUID_PKG)
+func genImports(f *File, stdImports, otherImports map[string]string) string {
+	if len(stdImports) == 0 && len(otherImports) == 0 {
+		return ""
 	}
-	return fmt.Sprintf(importsFmt, uuidPkg, f.Driver), nil
+	out := "import (\n"
+	for path, _ := range stdImports {
+		out += fmt.Sprintf("\"%s\"\n", path)
+	}
+	if len(otherImports) != 0 {
+		out += "\n"
+	}
+	for path, name := range otherImports {
+		if name != "" {
+			out += name + " "
+		}
+		out += fmt.Sprintf("\"%s\"\n", path)
+	}
+	out += ")"
+	return out
 }
 
 const tableTypeFmt = `
@@ -231,13 +240,13 @@ func genIndexesMethod(s *Struct) string {
 }
 
 const aliasMethodFmt = `
-// Aliases aliases column names as hex-encoded indexes, for faster look-ups during
+// Alias aliases column names as hex-encoded indexes, for faster look-ups during
 // decoding. If no column names are provided, all columns will be aliased, in
 // which case AliasAll may be a faster alternative.
-func (t *%sTableType) Aliases(colnames ...string) ([]string, error) {
+func (t *%sTableType) Alias(colnames ...string) ([]string, error) {
 	aliases := []string{}
 	// If no columns are specified, alias all columns:
-	if len(cols) == 0 {
+	if len(colnames) == 0 {
 		return %sTable.Aliases[:%d], nil
 	}
 	indexes, err := %sTable.Indexes(colnames...)
@@ -330,6 +339,7 @@ func genEncoderArray(s *Struct) (string, error) {
 		switch {
 		case op.CustomEncode():
 			if c.Type == "hstore" {
+				// hstore oid varies, set it to 0 as a sentinel value:
 				oidName = "Oid(0)"
 			} else {
 				oidName += "Oid"
@@ -340,7 +350,9 @@ func genEncoderArray(s *Struct) (string, error) {
 			if op.DerefPass() {
 				deref = "*"
 			}
-			out += fmt.Sprintf("return pgx.Hstore(%sv.%s).Encode(wbuf, pgx.Oid(0))\n", deref, f.Name)
+			out += fmt.Sprintf("h := pgx.Hstore(%sv.%s)\n", deref, f.Name)
+			// hstore oid varies, set it to 0 as a sentinel value:
+			out += "return h.Encode(wbuf, pgx.Oid(0))\n"
 		case op.UuidEncode():
 			deref := ""
 			if op.DerefPass() {
@@ -354,7 +366,8 @@ func genEncoderArray(s *Struct) (string, error) {
 				out += "return nil\n"
 			} else {
 				out += "wbuf.WriteInt32(16)\n"
-				out += fmt.Sprintf("wbuf.WriteBytes(%sv.%s[:16])\n", deref, f.Name)
+				out += fmt.Sprintf("u := %sv.%s\n", deref, f.Name)
+				out += "wbuf.WriteBytes(u[:16])\n"
 				out += "return nil\n"
 			}
 		default:
@@ -438,7 +451,8 @@ func genColumnDecoder(s *Struct, c *Column) (string, error) {
 		if op.PtrAssign() {
 			deref = "*"
 		}
-		out += fmt.Sprintf("return pgx.Hstore(%sv.%s).Scan(vr)\n", deref, f.Name)
+		out += fmt.Sprintf("h := pgx.Hstore(%sv.%s)\n", deref, f.Name)
+		out += "return h.Scan(vr)\n"
 	case op.UuidDecode():
 		deref := ""
 		if op.PtrAssign() {
@@ -545,11 +559,12 @@ func genOidArray(s *Struct) string {
 	for _, c := range s.Columns {
 		switch c.Type {
 		case "hstore":
+			// hstore oid varies, set it to 0 as a sentinel value:
 			out += "pgx.Oid(0),\n"
 		case "json":
-			out += fmt.Sprintf("pgx.Oid(%d),\n", JSON_OID)
+			out += fmt.Sprintf("pgx.Oid(%d),\n", JSONOid)
 		case "uuid":
-			out += fmt.Sprintf("pgx.Oid(%d),\n", UUID_OID)
+			out += fmt.Sprintf("pgx.Oid(%d),\n", UUIDOid)
 		default:
 			out += fmt.Sprintf("pgx.%sOid,\n", DataTypeNames[c.Type])
 		}
@@ -580,7 +595,7 @@ func (v *%s) DecodeRow(r *pgx.Rows) error {
 	for _ = range r.FieldDescriptions() {
 		vr, ok := r.NextColumn()
 		if !ok {
-			if vr != nil && vr.Err() {
+			if vr != nil && vr.Err() != nil {
 				return vr.Err()
 			}
 			break
@@ -629,7 +644,7 @@ const paramsEncoderFmt = `
 type %sParamsEncoder struct {
 	Indexes       []int
 	Formats       []int
-	ValueEncoders []func(v *%s, wbuf *pgx.WriteBuf)
+	ValueEncoders []func(v *%s, wbuf *pgx.WriteBuf) error
 	v *%s
 }
 
@@ -648,7 +663,7 @@ const newEncoderFmt = `
 // for the columns/fields named by colnames
 func (t *%sTableType) Encoder(colnames ...string) (*%sParamsEncoder, error) {
 	formats := make([]int, len(colnames))
-	encoders := make([]func(*%s, *pgx.WriteBuf), len(colnames))
+	encoders := make([]func(*%s, *pgx.WriteBuf) error, len(colnames))
 
 	indexes, err := %sTable.Indexes(colnames...)
 	if err != nil {
@@ -720,7 +735,9 @@ const encodeParamsFmt = `
 // EncodeParams encodes the param values into wbuf, as part of a raw query
 func (pe *%sParamsEncoder) EncodeParams(ps *pgx.PreparedStatement, wbuf *pgx.WriteBuf) error {
 	for _, enc := range pe.ValueEncoders {
-		enc(pe.v, wbuf)
+		if err := enc(pe.v, wbuf); err != nil {
+			return err
+		}
 	}
 	return nil
 }
