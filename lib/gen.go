@@ -9,6 +9,7 @@ import (
 )
 
 const DRIVER = "github.com/wdamron/pgx"
+const PGTYPES_PKG = "github.com/wdamron/pgx-gen/pgtypes"
 const UUID_PKG = "github.com/satori/go.uuid"
 
 // type File holds information extracted from a Go source file
@@ -71,6 +72,8 @@ func (f *File) gen() ([]byte, error) {
 		stdImports["encoding/hex"] = ""
 		// ensure driver is imported when columns are present:
 		otherImports[f.Driver] = ""
+		// ensure pgtypes is imported when columns are present:
+		otherImports[PGTYPES_PKG] = ""
 
 		for _, c := range cols {
 			switch c.Type {
@@ -120,16 +123,10 @@ func (f *File) gen() ([]byte, error) {
 		body += genParamsEncoderType(&s)
 
 		// generate method def for ({struct-name})TableType.Encoder:
-		body += genEncoderFactory(&s)
+		body += genEncoderCreator(&s)
 
 		// generate method def for {struct-name}ParamsEncoder.Bind:
 		body += genBindVal(&s)
-
-		// generate method def for {struct-name}ParamsEncoder.EncodeParamFormats:
-		body += genEncodeParamFormats(&s)
-
-		// generate method def for {struct-name}ParamsEncoder.EncodeParams:
-		body += genEncodeParams(&s)
 	}
 
 	out += genImports(f, stdImports, otherImports)
@@ -174,9 +171,9 @@ const tableTypeFmt = `
 // %sTableType is the type of %sTable, which describes the table
 // corresponding with type %s
 type %sTableType struct {
-	// Encoders can be used to encode a single param value from type %s
-	// into a write buffer, as part of a raw query
-	Encoders    [%d]func(*%s, *pgx.WriteBuf) error
+	// UnboundEncoders are used by %sParamsEncoder.Bind to bind
+	// query/statement parameters from a value of type %s
+	UnboundEncoders    [%d]func(*%s) pgx.Encoder
 	// Decoders can be used to decode a single column value from a
 	// pgx.ValueReader into type %s
 	Decoders    [%d]func(*%s, *pgx.ValueReader) error
@@ -199,7 +196,7 @@ type %sTableType struct {
 // generate type def for {struct-name}TableType struct
 func genTableType(s *Struct) string {
 	cols := len(s.Columns)
-	return fmt.Sprintf(tableTypeFmt, s.Name, s.Name, s.Name, s.Name, s.Name, cols, s.Name, s.Name, cols, s.Name, cols, cols, cols, cols, cols)
+	return fmt.Sprintf(tableTypeFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, cols, s.Name, s.Name, cols, s.Name, cols, cols, cols, cols, cols)
 }
 
 // generate method def for ({struct-name})TableType.Index
@@ -322,80 +319,23 @@ func genTable(s *Struct) (string, error) {
 
 // include ordered list of param-encoder funcs (see genTable)
 func genEncoderArray(s *Struct) (string, error) {
-	out := fmt.Sprintf("Encoders: [%d]func(*%s, *pgx.WriteBuf) error {\n", len(s.Columns), s.Name)
+	out := fmt.Sprintf("UnboundEncoders: [%d]func(*%s) pgx.Encoder {\n", len(s.Columns), s.Name)
 	for _, c := range s.Columns {
 		f := c.StructField
 		op := c.EncodeOp
 		if op == Op(0) && c.Type != "json" {
 			return "", fmt.Errorf("no column encoder available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
 		}
-		oidName := DataTypeNames[c.Type]
-		if oidName == "" {
+		dtName := DataTypeNames[c.Type]
+		if dtName == "" {
 			return "", fmt.Errorf("no column oid available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
 		}
 
-		out += fmt.Sprintf("// Encode (*%s).%s as %s\n", s.Name, c.StructField.Name, c.Type)
-		out += fmt.Sprintf("func(v *%s, wbuf *pgx.WriteBuf) error {\n", s.Name)
+		out += fmt.Sprintf("// Encode v.%s as %s\n", f.Name, c.Type)
+		out += fmt.Sprintf("func(v *%s) pgx.Encoder {\n", s.Name)
 		switch {
-		case op.CustomEncode():
-			if c.Type == "hstore" {
-				// hstore oid varies, set it to 0 as a sentinel value:
-				oidName = "Oid(0)"
-			} else {
-				oidName += "Oid"
-			}
-			out += fmt.Sprintf("return v.%s.Encode(wbuf, pgx.%s)\n", f.Name, oidName)
-		case op.HstoreMapEncode():
-			deref := ""
-			if op.DerefPass() {
-				deref = "*"
-			}
-			out += fmt.Sprintf("h := pgx.Hstore(%sv.%s)\n", deref, f.Name)
-			// hstore oid varies, set it to 0 as a sentinel value:
-			out += "return h.Encode(wbuf, pgx.Oid(0))\n"
-		case op.UuidEncode():
-			deref := ""
-			if op.DerefPass() {
-				deref = "*"
-			}
-			if op.UuidStringEncode() {
-				out += fmt.Sprintf("u, err := uuid.FromString(%sv.%s)\n", deref, f.Name)
-				out += "if err != nil {\nreturn err\n}\n"
-				out += "wbuf.WriteInt32(16)\n"
-				out += "wbuf.WriteBytes(u[:16])\n"
-				out += "return nil\n"
-			} else {
-				out += "wbuf.WriteInt32(16)\n"
-				out += fmt.Sprintf("u := %sv.%s\n", deref, f.Name)
-				out += "wbuf.WriteBytes(u[:16])\n"
-				out += "return nil\n"
-			}
 		default:
-			if c.Type == "json" {
-				switch f.Type {
-				case "string", "*string":
-					deref := ""
-					if f.Type[0] == '*' {
-						deref = "*"
-					}
-					out += fmt.Sprintf("wbuf.EncodeText(%sv.%s)\n", deref, f.Name)
-					out += "return nil\n"
-				case "[]byte", "*[]byte":
-					deref := ""
-					if f.Type[0] == '*' {
-						deref = "*"
-					}
-					out += fmt.Sprintf("wbuf.WriteInt32(int32(len(%sv.%s)))\n", deref, f.Name)
-					out += fmt.Sprintf("wbuf.WriteBytes(%sv.%s)\n", deref, f.Name)
-					out += "return nil\n"
-				default:
-					out += fmt.Sprintf("b, err := json.Marshal(v.%s)\n", f.Name)
-					out += "if err != nil {\nreturn err\n}\n"
-					out += "wbuf.WriteInt32(int32(len(b)))\n"
-					out += "wbuf.WriteBytes(b)\n"
-					out += "return nil\n"
-				}
-			} else {
+			if c.Type != "json" {
 				var castPrefix, castSuffix string
 				if op.MaskCast() != Op(0) {
 					castPrefix, castSuffix = op.FormatCast()+"(", ")"
@@ -404,9 +344,41 @@ func genEncoderArray(s *Struct) (string, error) {
 				if op.DerefPass() {
 					deref = "*"
 				}
-				out += fmt.Sprintf("wbuf.Encode%s(%s%sv.%s%s)\n", oidName, castPrefix, deref, c.StructField.Name, castSuffix)
-				out += "return nil\n"
+				out += fmt.Sprintf("return pgtypes.%sEncoder(%s%sv.%s%s)\n", dtName, castPrefix, deref, f.Name, castSuffix)
+			} else {
+				switch f.Type {
+				case "string", "*string":
+					deref := ""
+					if f.Type[0] == '*' {
+						deref = "*"
+					}
+					out += fmt.Sprintf("return pgtypes.JSONEncoderString(%sv.%s)\n", deref, f.Name)
+				case "[]byte", "*[]byte":
+					deref := ""
+					if f.Type[0] == '*' {
+						deref = "*"
+					}
+					out += fmt.Sprintf("return pgtypes.JSONEncoderBytes(%sv.%s)\n", deref, f.Name)
+				default:
+					out += fmt.Sprintf("return pgtypes.JSONEncoder(v.%s)\n", f.Name)
+				}
 			}
+		case op.CustomEncode():
+			out += fmt.Sprintf("return v.%s\n", f.Name)
+		case op.HstoreMapEncode():
+			deref := ""
+			if op.DerefPass() {
+				deref = "*"
+			}
+			out += fmt.Sprintf("h := pgx.Hstore(%sv.%s)\n", deref, f.Name)
+			// hstore oid varies, set it to 0 as a sentinel value:
+			out += "return pgtypes.HstoreEncoder(h)\n"
+		case op.UuidStringEncode():
+			deref := ""
+			if op.DerefPass() {
+				deref = "*"
+			}
+			out += fmt.Sprintf("return pgtypes.UUIDEncoderString(%sv.%s)\n", deref, f.Name)
 		}
 		out += "},\n"
 	}
@@ -639,112 +611,55 @@ func genRowDecoder(s *Struct) string {
 }
 
 const paramsEncoderFmt = `
-// %sParamsEncoder encodes parameter formats and values for a prepared statement
-// to a buffer, and implements pgx.ParamsEncoder
+// %sParamsEncoder binds query/statement parameters from a value
+// of type %s
 type %sParamsEncoder struct {
 	Indexes       []int
-	Formats       []int
-	ValueEncoders []func(v *%s, wbuf *pgx.WriteBuf) error
-	v *%s
 }
-
-// %sParamsEncoder should implement pgx.ParamsEncoder
-var _ pgx.ParamsEncoder = (*%sParamsEncoder)(nil)
 
 `
 
 // generate type def for {struct-name}ParamsEncoder struct
 func genParamsEncoderType(s *Struct) string {
-	return fmt.Sprintf(paramsEncoderFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name)
+	return fmt.Sprintf(paramsEncoderFmt, s.Name, s.Name, s.Name)
 }
 
 const newEncoderFmt = `
 // Encoder creates an unbound instance of type %sParamsEncoder
 // for the columns/fields named by colnames
 func (t *%sTableType) Encoder(colnames ...string) (*%sParamsEncoder, error) {
-	formats := make([]int, len(colnames))
-	encoders := make([]func(*%s, *pgx.WriteBuf) error, len(colnames))
-
 	indexes, err := %sTable.Indexes(colnames...)
 	if err != nil {
 		return nil, err
 	}
-	for i, index := range indexes {
-		formats[i] = %sTable.Formats[index]
-		encoders[i] = %sTable.Encoders[index]
-	}
-	
 
-	pe := &%sParamsEncoder{
-		Indexes: indexes,
-		Formats: formats,
-		ValueEncoders: encoders,
-	}
+	pe := &%sParamsEncoder{Indexes: indexes}
 	return pe, nil
 }
 
 `
 
 // generate method def for {struct-name}TableType.Encoder
-func genEncoderFactory(s *Struct) string {
-	return fmt.Sprintf(newEncoderFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name)
+func genEncoderCreator(s *Struct) string {
+	return fmt.Sprintf(newEncoderFmt, s.Name, s.Name, s.Name, s.Name, s.Name)
 }
 
 const bindValFmt = `
-// Bind binds value v to pe, returning a pgx.ParamsEncoder for use within raw queries
-func (pe %sParamsEncoder) Bind(v *%s) pgx.ParamsEncoder {
-	return &%sParamsEncoder{
-		Indexes: pe.Indexes,
-		Formats: pe.Formats,
-		ValueEncoders: pe.ValueEncoders,
-		v: v,
+// Bind binds query/statement parameter encoders from v
+func (pe %sParamsEncoder) Bind(v *%s) ([]pgx.Encoder, error) {
+	encoders := make([]pgx.Encoder, len(pe.Indexes))
+	for i, index := range pe.Indexes {
+		if index < 0 || index > len(%sTable.UnboundEncoders) {
+			return nil, errors.New("column encoder index out of range")
+		}
+		encoders[i] = %sTable.UnboundEncoders[index](v)
 	}
+	return encoders, nil
 }
 
 `
 
 // generate method def for {struct-name}ParamsEncoder.Bind
 func genBindVal(s *Struct) string {
-	return fmt.Sprintf(bindValFmt, s.Name, s.Name, s.Name)
-}
-
-const encodeParamFormatsFmt = `
-// EncodeParamFormats encodes param formats into wbuf, as part of a raw query
-func (pe *%sParamsEncoder) EncodeParamFormats(ps *pgx.PreparedStatement, wbuf *pgx.WriteBuf) error {
-	if len(ps.ParameterOids) != len(pe.Formats) {
-		return errors.New("param count of encoder and prepared statement do not match")
-	}
-	for i, oid := range ps.ParameterOids {
-		foundOid := %sTable.Oids[pe.Indexes[i]]
-		if oid != foundOid && foundOid != pgx.Oid(0) {
-			return errors.New("param oids of encoder and prepared statement do not match")
-		}
-		wbuf.WriteInt16(int16(pe.Formats[i]))
-	}
-	return nil
-}
-
-`
-
-// generate method def for {struct-name}ParamsEncoder.EncodeParamFormats
-func genEncodeParamFormats(s *Struct) string {
-	return fmt.Sprintf(encodeParamFormatsFmt, s.Name, s.Name)
-}
-
-const encodeParamsFmt = `
-// EncodeParams encodes the param values into wbuf, as part of a raw query
-func (pe *%sParamsEncoder) EncodeParams(ps *pgx.PreparedStatement, wbuf *pgx.WriteBuf) error {
-	for _, enc := range pe.ValueEncoders {
-		if err := enc(pe.v, wbuf); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-`
-
-// generate method def for {struct-name}ParamsEncoder.EncodeParams
-func genEncodeParams(s *Struct) string {
-	return fmt.Sprintf(encodeParamsFmt, s.Name)
+	return fmt.Sprintf(bindValFmt, s.Name, s.Name, s.Name, s.Name)
 }

@@ -2,9 +2,12 @@ package pgtypes
 
 import (
 	"encoding/binary"
+	"encoding/json"
+	"fmt"
 	"math"
 	"time"
 
+	"github.com/satori/go.uuid"
 	"github.com/wdamron/pgx"
 )
 
@@ -13,7 +16,7 @@ type boolEncoder struct {
 }
 
 func BoolEncoder(v bool) pgx.Encoder {
-	return boolEncoder{v}
+	return &boolEncoder{v}
 }
 
 func (e *boolEncoder) FormatCode() int16 { return 1 }
@@ -41,7 +44,7 @@ type int2Encoder struct {
 }
 
 func Int2Encoder(v int16) pgx.Encoder {
-	return int2Encoder{v}
+	return &int2Encoder{v}
 }
 
 func (e *int2Encoder) FormatCode() int16 { return 1 }
@@ -65,7 +68,7 @@ type int4Encoder struct {
 }
 
 func Int4Encoder(v int32) pgx.Encoder {
-	return int4Encoder{v}
+	return &int4Encoder{v}
 }
 
 func (e *int4Encoder) FormatCode() int16 { return 1 }
@@ -89,7 +92,7 @@ type int8Encoder struct {
 }
 
 func Int8Encoder(v int64) pgx.Encoder {
-	return int8Encoder{v}
+	return &int8Encoder{v}
 }
 
 func (e *int8Encoder) FormatCode() int16 { return 1 }
@@ -115,7 +118,7 @@ type float4Encoder struct {
 }
 
 func Float4Encoder(v float32) pgx.Encoder {
-	return float4Encoder{v}
+	return &float4Encoder{v}
 }
 
 func (e *float4Encoder) FormatCode() int16 { return 1 }
@@ -141,7 +144,7 @@ type float8Encoder struct {
 }
 
 func Float8Encoder(v float64) pgx.Encoder {
-	return float8Encoder{v}
+	return &float8Encoder{v}
 }
 
 func (e *float8Encoder) FormatCode() int16 { return 1 }
@@ -168,7 +171,7 @@ type byteaEncoder struct {
 }
 
 func ByteaEncoder(v []byte) pgx.Encoder {
-	return byteaEncoder{v}
+	return &byteaEncoder{v}
 }
 
 func (e *byteaEncoder) FormatCode() int16 { return 1 }
@@ -197,7 +200,7 @@ type textEncoder struct {
 }
 
 func TextEncoder(v string) pgx.Encoder {
-	return textEncoder{v}
+	return &textEncoder{v}
 }
 
 func (e *textEncoder) FormatCode() int16 { return 0 }
@@ -223,7 +226,7 @@ type textEncoderBytes struct {
 }
 
 func TextEncoderBytes(v []byte) pgx.Encoder {
-	return textEncoderBytes{v}
+	return &textEncoderBytes{v}
 }
 
 func (e *textEncoderBytes) FormatCode() int16 { return 0 }
@@ -248,7 +251,7 @@ type varcharEncoder struct {
 }
 
 func VarcharEncoder(v string) pgx.Encoder {
-	return varcharEncoder{v}
+	return &varcharEncoder{v}
 }
 
 func (e *varcharEncoder) FormatCode() int16 { return 0 }
@@ -262,15 +265,15 @@ func (e *varcharEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 }
 
 func EncodeVarchar(wbuf *pgx.WriteBuf, v string) error {
-	return EncodeText(wb, string)
+	return EncodeText(wbuf, v)
 }
 
 type varcharEncoderBytes struct {
-	v string
+	v []byte
 }
 
-func VarcharEncoderBytes(v string) pgx.Encoder {
-	return varcharEncoder{v}
+func VarcharEncoderBytes(v []byte) pgx.Encoder {
+	return &varcharEncoderBytes{v}
 }
 
 func (e *varcharEncoderBytes) FormatCode() int16 { return 0 }
@@ -288,7 +291,7 @@ type dateEncoder struct {
 }
 
 func DateEncoder(v time.Time) pgx.Encoder {
-	return dateEncoder{v}
+	return &dateEncoder{v}
 }
 
 func (e *dateEncoder) FormatCode() int16 { return 0 }
@@ -312,7 +315,7 @@ type timestampEncoder struct {
 }
 
 func TimestampEncoder(v time.Time) pgx.Encoder {
-	return timestampEncoder{v}
+	return &timestampEncoder{v}
 }
 
 func (e *timestampEncoder) FormatCode() int16 { return 1 }
@@ -334,7 +337,7 @@ type timestampTzEncoder struct {
 }
 
 func TimestampTzEncoder(v time.Time) pgx.Encoder {
-	return timestampTzEncoder{v}
+	return &timestampTzEncoder{v}
 }
 
 func (e *timestampTzEncoder) FormatCode() int16 { return 1 }
@@ -363,7 +366,7 @@ type oidEncoder struct {
 }
 
 func OidEncoder(v pgx.Oid) pgx.Encoder {
-	return oidEncoder{v}
+	return &oidEncoder{v}
 }
 
 func (e *oidEncoder) FormatCode() int16 { return 1 }
@@ -382,7 +385,7 @@ func EncodeOid(wbuf *pgx.WriteBuf, v pgx.Oid) error {
 	return nil
 }
 
-func encodeArrayHeaderBytes(oid Oid, length, sizePerItem int) []byte {
+func encodeArrayHeaderBytes(oid pgx.Oid, length, sizePerItem int) []byte {
 	b := make([]byte, 24)
 	binary.BigEndian.PutUint32(b[:4], uint32(20+length*sizePerItem))
 	binary.BigEndian.PutUint32(b[4:8], 1)                // number of dimensions
@@ -398,7 +401,7 @@ type boolArrayEncoder struct {
 }
 
 func BoolArrayEncoder(v []bool) pgx.Encoder {
-	return boolArrayEncoder{v}
+	return &boolArrayEncoder{v}
 }
 
 func (e *boolArrayEncoder) FormatCode() int16 { return 1 }
@@ -426,7 +429,7 @@ type int2ArrayEncoder struct {
 }
 
 func Int2ArrayEncoder(v []int16) pgx.Encoder {
-	return int2ArrayEncoder{v}
+	return &int2ArrayEncoder{v}
 }
 
 func (e *int2ArrayEncoder) FormatCode() int16 { return 1 }
@@ -446,7 +449,6 @@ func EncodeInt2Array(wbuf *pgx.WriteBuf, vs []int16) error {
 			return err
 		}
 	}
-	wbuf.WriteBytes(append(h, b...))
 	return nil
 }
 
@@ -455,7 +457,7 @@ type int4ArrayEncoder struct {
 }
 
 func Int4ArrayEncoder(v []int32) pgx.Encoder {
-	return int4ArrayEncoder{v}
+	return &int4ArrayEncoder{v}
 }
 
 func (e *int4ArrayEncoder) FormatCode() int16 { return 1 }
@@ -483,7 +485,7 @@ type int8ArrayEncoder struct {
 }
 
 func Int8ArrayEncoder(v []int64) pgx.Encoder {
-	return int8ArrayEncoder{v}
+	return &int8ArrayEncoder{v}
 }
 
 func (e *int8ArrayEncoder) FormatCode() int16 { return 1 }
@@ -511,7 +513,7 @@ type float4ArrayEncoder struct {
 }
 
 func Float4ArrayEncoder(v []float32) pgx.Encoder {
-	return float4ArrayEncoder{v}
+	return &float4ArrayEncoder{v}
 }
 
 func (e *float4ArrayEncoder) FormatCode() int16 { return 1 }
@@ -539,7 +541,7 @@ type float8ArrayEncoder struct {
 }
 
 func Float8ArrayEncoder(v []float64) pgx.Encoder {
-	return float8ArrayEncoder{v}
+	return &float8ArrayEncoder{v}
 }
 
 func (e *float8ArrayEncoder) FormatCode() int16 { return 1 }
@@ -567,7 +569,7 @@ type textArrayEncoder struct {
 }
 
 func TextArrayEncoder(v []string) pgx.Encoder {
-	return textArrayEncoder{v}
+	return &textArrayEncoder{v}
 }
 
 func (e *textArrayEncoder) FormatCode() int16 { return 1 }
@@ -591,12 +593,13 @@ func encodeTextArray(wbuf *pgx.WriteBuf, vs []string, oid pgx.Oid) error {
 	}
 	size := 20 + len(vs)*4 + totalStringSize
 	header := make([]byte, 4+20)
-	binary.BigEndian.PutUint32(b[:4], uint32(size))
-	binary.BigEndian.PutUint32(b[4:8], 1)                 // number of dimensions
-	binary.BigEndian.PutUint32(b[8:12], 0)                // no nulls
-	binary.BigEndian.PutUint32(b[12:16], uint32(oid))     // type of elements
-	binary.BigEndian.PutUint32(b[16:20], uint32(len(vs))) // number of elements
-	binary.BigEndian.PutUint32(b[20:24], 1)               // index of first element
+	binary.BigEndian.PutUint32(header[:4], uint32(size))
+	binary.BigEndian.PutUint32(header[4:8], 1)                 // number of dimensions
+	binary.BigEndian.PutUint32(header[8:12], 0)                // no nulls
+	binary.BigEndian.PutUint32(header[12:16], uint32(oid))     // type of elements
+	binary.BigEndian.PutUint32(header[16:20], uint32(len(vs))) // number of elements
+	binary.BigEndian.PutUint32(header[20:24], 1)               // index of first element
+	wbuf.WriteBytes(header)
 	var enc func(*pgx.WriteBuf, string) error
 	switch oid {
 	default:
@@ -617,7 +620,7 @@ type varcharArrayEncoder struct {
 }
 
 func VarcharArrayEncoder(v []string) pgx.Encoder {
-	return varcharArrayEncoder{v}
+	return &varcharArrayEncoder{v}
 }
 
 func (e *varcharArrayEncoder) FormatCode() int16 { return 1 }
@@ -639,7 +642,7 @@ type timestampArrayEncoder struct {
 }
 
 func TimestampArrayEncoder(v []time.Time) pgx.Encoder {
-	return timestampArrayEncoder{v}
+	return &timestampArrayEncoder{v}
 }
 
 func (e *timestampArrayEncoder) FormatCode() int16 { return 1 }
@@ -655,7 +658,7 @@ func (e *timestampArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 func EncodeTimestampArray(wbuf *pgx.WriteBuf, vs []time.Time) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(TimestampOid, len(vs), 12))
 	for _, v := range vs {
-		if err != EncodeTimestamp(wbuf, v); err != nil {
+		if err := EncodeTimestamp(wbuf, v); err != nil {
 			return err
 		}
 	}
@@ -667,7 +670,7 @@ type timestampTzArrayEncoder struct {
 }
 
 func TimestampTzArrayEncoder(v []time.Time) pgx.Encoder {
-	return timestampTzArrayEncoder{v}
+	return &timestampTzArrayEncoder{v}
 }
 
 func (e *timestampTzArrayEncoder) FormatCode() int16 { return 1 }
@@ -695,7 +698,7 @@ type hstoreEncoder struct {
 }
 
 func HstoreEncoder(v pgx.Hstore) pgx.Encoder {
-	return hstoreEncoder{v}
+	return &hstoreEncoder{v}
 }
 
 func (e *hstoreEncoder) FormatCode() int16 { return 1 }
@@ -706,7 +709,7 @@ func (e *hstoreEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 
 func EncodeHstore(wbuf *pgx.WriteBuf, kv pgx.Hstore) error {
 	wbuf.WriteInt32(int32(len(kv)))
-	for k, v := range v {
+	for k, v := range kv {
 		wbuf.WriteInt32(int32(len(k)))
 		wbuf.WriteString(k)
 		wbuf.WriteInt32(int32(len(v)))
@@ -720,7 +723,12 @@ type uuidEncoder struct {
 }
 
 func UUIDEncoder(v uuid.UUID) pgx.Encoder {
-	return uuidEncoder{v}
+	return &uuidEncoder{v}
+}
+
+func UUIDEncoderString(v string) pgx.Encoder {
+	u, _ := uuid.FromString(v)
+	return &uuidEncoder{u}
 }
 
 func (e *uuidEncoder) FormatCode() int16 { return 1 }
@@ -735,6 +743,100 @@ func (e *uuidEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 
 func EncodeUUID(wbuf *pgx.WriteBuf, v uuid.UUID) error {
 	wbuf.WriteInt32(16)
-	wbuf.WriteBytes(e.v[:16])
+	wbuf.WriteBytes(v[:16])
+	return nil
+}
+
+type uuidArrayEncoder struct {
+	v []uuid.UUID
+}
+
+func UUIDArrayEncoder(v []uuid.UUID) pgx.Encoder {
+	return &uuidArrayEncoder{v}
+}
+
+func (e *uuidArrayEncoder) FormatCode() int16 { return 1 }
+
+func (e *uuidArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
+	if oid != UUIDArrayOid {
+		return fmt.Errorf("UUIDArrayEncoder.Encode cannot encode into OID: %d", oid)
+	}
+
+	return EncodeUUIDArray(wbuf, e.v)
+}
+
+func EncodeUUIDArray(wbuf *pgx.WriteBuf, vs []uuid.UUID) error {
+	wbuf.WriteBytes(encodeArrayHeaderBytes(UUIDOid, len(vs), 16))
+	for _, v := range vs {
+		if err := EncodeUUID(wbuf, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type jsonEncoder struct {
+	v interface{}
+}
+
+func JSONEncoder(v interface{}) pgx.Encoder {
+	return &jsonEncoder{v}
+}
+
+func (e *jsonEncoder) FormatCode() int16 { return 0 }
+
+func (e *jsonEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
+	if oid != JSONOid {
+		return fmt.Errorf("JSONEncoder.Encode cannot encode into OID: %d", oid)
+	}
+
+	return EncodeJSON(wbuf, e.v)
+}
+
+func EncodeJSON(wbuf *pgx.WriteBuf, v interface{}) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	wbuf.WriteInt32(int32(len(b)))
+	wbuf.WriteBytes(b)
+	return nil
+}
+
+type jsonEncoderString struct {
+	v string
+}
+
+func JSONEncoderString(v string) pgx.Encoder {
+	return &jsonEncoderString{v}
+}
+
+func (e *jsonEncoderString) FormatCode() int16 { return 0 }
+
+func (e *jsonEncoderString) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
+	if oid != JSONOid {
+		return fmt.Errorf("JSONEncoder.Encode cannot encode into OID: %d", oid)
+	}
+	wbuf.WriteInt32(int32(len(e.v)))
+	wbuf.WriteString(e.v)
+	return nil
+}
+
+type jsonEncoderBytes struct {
+	v []byte
+}
+
+func JSONEncoderBytes(v []byte) pgx.Encoder {
+	return &jsonEncoderBytes{v}
+}
+
+func (e *jsonEncoderBytes) FormatCode() int16 { return 0 }
+
+func (e *jsonEncoderBytes) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
+	if oid != JSONOid {
+		return fmt.Errorf("JSONEncoder.Encode cannot encode into OID: %d", oid)
+	}
+	wbuf.WriteInt32(int32(len(e.v)))
+	wbuf.WriteBytes(e.v)
 	return nil
 }
