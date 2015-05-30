@@ -189,12 +189,6 @@ var Encoders = map[string]OpMap{
 	},
 
 	// pgx built-in encoders:
-	"pgx.Hstore": {
-		"hstore": OpCustomEncode,
-	},
-	"*pgx.Hstore": {
-		"hstore": OpCustomEncode,
-	},
 	"pgx.NullBool": {
 		"bool": OpCustomEncode,
 	},
@@ -263,6 +257,12 @@ var Encoders = map[string]OpMap{
 	},
 
 	// custom encoders:
+	"pgx.Hstore": {
+		"hstore": OpPass,
+	},
+	"*pgx.Hstore": {
+		"hstore": OpDerefPass,
+	},
 	"uuid.UUID": {
 		"uuid": OpUuidEncode,
 	},

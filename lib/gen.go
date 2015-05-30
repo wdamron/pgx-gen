@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"go/format"
+	"strings"
 
 	"github.com/wdamron/astx"
 )
@@ -82,15 +83,15 @@ func (f *File) gen() ([]byte, error) {
 				if (ftype == "uuid.UUID" || ftype == "*uuid.UUID") && !uuidImported {
 					return nil, fmt.Errorf("package %s must be imported to use uuid column data types\n(see %s)", uuidPkg, f.File.AbsPath)
 				}
-				otherImports[UUID_PKG] = ""
-			case "json":
-				switch c.StructField.Type {
-				// include json package when encoding/decoding Go types:
-				default:
-					stdImports["encoding/json"] = ""
-				// json is not encoded/decoded for string and []byte types:
-				case "string", "*string", "[]byte", "*[]byte":
-				}
+			// case "json":
+			// 	switch c.StructField.Type {
+			// 	// include json package when encoding/decoding Go types:
+			// 	default:
+			// 		stdImports["encoding/json"] = ""
+			// 	// json is not encoded/decoded for string and []byte types:
+			// 	case "string", "*string", "[]byte", "*[]byte":
+			// 	}
+			default:
 			}
 		}
 
@@ -119,14 +120,23 @@ func (f *File) gen() ([]byte, error) {
 		// generate method def for {struct-name}.DecodeRow:
 		body += genRowDecoder(&s)
 
-		// generate type def for {struct-name}ParamsEncoder struct:
-		body += genParamsEncoderType(&s)
+		// generate type def for {struct-name}FieldEncoders:
+		body += genFieldEncodersType(&s)
 
-		// generate method def for ({struct-name})TableType.Encoder:
-		body += genEncoderCreator(&s)
+		// generate method def for ({struct-name})TableType.Encoders:
+		body += genEncodersGetter(&s)
 
-		// generate method def for {struct-name}ParamsEncoder.Bind:
-		body += genBindVal(&s)
+		// generate method def for {struct-name}FieldEncoders.Bind:
+		body += genEncodersBind(&s)
+
+		// generate type def for {struct-name}FieldScanners:
+		body += genFieldScannersType(&s)
+
+		// generate method def for ({struct-name})TableType.Scanners:
+		body += genScannersGetter(&s)
+
+		// generate method def for {struct-name}FieldScanners.Bind:
+		body += genScannersBind(&s)
 	}
 
 	out += genImports(f, stdImports, otherImports)
@@ -174,9 +184,9 @@ type %sTableType struct {
 	// UnboundEncoders are used by %sParamsEncoder.Bind to bind
 	// query/statement parameters from a value of type %s
 	UnboundEncoders    [%d]func(*%s) pgx.Encoder
-	// Decoders can be used to decode a single column value from a
-	// pgx.ValueReader into type %s
-	Decoders    [%d]func(*%s, *pgx.ValueReader) error
+	// UnboundScanners are used by %sParamsScanner.Bind to bind
+	// query/statement results to fields within type %s
+	UnboundScanners    [%d]func(*%s) pgx.Scanner
 	// Names contains an ordered list of column names
 	Names [%d]string
 	// Types contains an ordered list of column types
@@ -196,7 +206,7 @@ type %sTableType struct {
 // generate type def for {struct-name}TableType struct
 func genTableType(s *Struct) string {
 	cols := len(s.Columns)
-	return fmt.Sprintf(tableTypeFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, cols, s.Name, s.Name, cols, s.Name, cols, cols, cols, cols, cols)
+	return fmt.Sprintf(tableTypeFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, cols, s.Name, s.Name, s.Name, cols, s.Name, cols, cols, cols, cols, cols)
 }
 
 // generate method def for ({struct-name})TableType.Index
@@ -215,8 +225,10 @@ func genIndexMethod(s *Struct) string {
 
 const indexesMethodFmt = `
 // Indexes returns a slice of indexes of the given columns in %sTable
-// with the given name. If any of the columns are not found, an error will be
-// returned and the returned slice of indexes will be nil.
+// with the given name.
+//
+// If any of the columns are not found, an error will be returned and the returned
+// slice of indexes will be nil.
 func (t *%sTableType) Indexes(colnames ...string) ([]int, error) {
 	indexes := make([]int, len(colnames))
 	for i, colname := range colnames {
@@ -238,8 +250,10 @@ func genIndexesMethod(s *Struct) string {
 
 const aliasMethodFmt = `
 // Alias aliases column names as hex-encoded indexes, for faster look-ups during
-// decoding. If no column names are provided, all columns will be aliased, in
-// which case AliasAll may be a faster alternative.
+// decoding.
+//
+// If no column names are provided, all columns will be aliased, in which case
+// AliasAll may be a faster alternative.
 func (t *%sTableType) Alias(colnames ...string) ([]string, error) {
 	aliases := []string{}
 	// If no columns are specified, alias all columns:
@@ -291,14 +305,14 @@ func genAliasAllMethod(s *Struct) string {
 func genTable(s *Struct) (string, error) {
 	out := fmt.Sprintf("// %sTable describes the table corresponding with type %s\n", s.Name, s.Name)
 	out += fmt.Sprintf("var %sTable = %sTableType{\n", s.Name, s.Name)
-	// include ordered list of param-encoder funcs:
-	encoders, err := genEncoderArray(s)
+	// include ordered list of field-encoder funcs:
+	encoders, err := genFieldEncoderArray(s)
 	if err != nil {
 		return "", err
 	}
 	out += encoders
-	// include ordered list of column-decoder funcs:
-	decoders, err := genColDecoderArray(s)
+	// include ordered list of field-scanner funcs:
+	decoders, err := genFieldScannerArray(s)
 	if err != nil {
 		return "", err
 	}
@@ -317,8 +331,8 @@ func genTable(s *Struct) (string, error) {
 	return out + "}\n\n", nil
 }
 
-// include ordered list of param-encoder funcs (see genTable)
-func genEncoderArray(s *Struct) (string, error) {
+// include ordered list of field-encoder funcs (see genTable)
+func genFieldEncoderArray(s *Struct) (string, error) {
 	out := fmt.Sprintf("UnboundEncoders: [%d]func(*%s) pgx.Encoder {\n", len(s.Columns), s.Name)
 	for _, c := range s.Columns {
 		f := c.StructField
@@ -333,6 +347,10 @@ func genEncoderArray(s *Struct) (string, error) {
 
 		out += fmt.Sprintf("// Encode v.%s as %s\n", f.Name, c.Type)
 		out += fmt.Sprintf("func(v *%s) pgx.Encoder {\n", s.Name)
+		deref := ""
+		if f.Type[0] == '*' {
+			deref = "*"
+		}
 		switch {
 		default:
 			if c.Type != "json" {
@@ -340,24 +358,12 @@ func genEncoderArray(s *Struct) (string, error) {
 				if op.MaskCast() != Op(0) {
 					castPrefix, castSuffix = op.FormatCast()+"(", ")"
 				}
-				deref := ""
-				if op.DerefPass() {
-					deref = "*"
-				}
 				out += fmt.Sprintf("return pgtypes.%sEncoder(%s%sv.%s%s)\n", dtName, castPrefix, deref, f.Name, castSuffix)
 			} else {
 				switch f.Type {
 				case "string", "*string":
-					deref := ""
-					if f.Type[0] == '*' {
-						deref = "*"
-					}
 					out += fmt.Sprintf("return pgtypes.JSONEncoderString(%sv.%s)\n", deref, f.Name)
 				case "[]byte", "*[]byte":
-					deref := ""
-					if f.Type[0] == '*' {
-						deref = "*"
-					}
 					out += fmt.Sprintf("return pgtypes.JSONEncoderBytes(%sv.%s)\n", deref, f.Name)
 				default:
 					out += fmt.Sprintf("return pgtypes.JSONEncoder(v.%s)\n", f.Name)
@@ -366,18 +372,8 @@ func genEncoderArray(s *Struct) (string, error) {
 		case op.CustomEncode():
 			out += fmt.Sprintf("return v.%s\n", f.Name)
 		case op.HstoreMapEncode():
-			deref := ""
-			if op.DerefPass() {
-				deref = "*"
-			}
-			out += fmt.Sprintf("h := pgx.Hstore(%sv.%s)\n", deref, f.Name)
-			// hstore oid varies, set it to 0 as a sentinel value:
-			out += "return pgtypes.HstoreEncoder(h)\n"
+			out += fmt.Sprintf("return pgtypes.HstoreMapEncoder(%sv.%s)\n", deref, f.Name)
 		case op.UuidStringEncode():
-			deref := ""
-			if op.DerefPass() {
-				deref = "*"
-			}
 			out += fmt.Sprintf("return pgtypes.UUIDEncoderString(%sv.%s)\n", deref, f.Name)
 		}
 		out += "},\n"
@@ -385,12 +381,12 @@ func genEncoderArray(s *Struct) (string, error) {
 	return out + "},\n", nil
 }
 
-// include ordered list of column-decoder funcs (see genTable)
-func genColDecoderArray(s *Struct) (string, error) {
+// include ordered list of field-scanner funcs (see genTable)
+func genFieldScannerArray(s *Struct) (string, error) {
 	count := len(s.Columns)
-	out := fmt.Sprintf("Decoders: [%d]func(*%s, *pgx.ValueReader) error{\n", count, s.Name)
+	out := fmt.Sprintf("UnboundScanners: [%d]func(*%s) pgx.Scanner{\n", count, s.Name)
 	for _, c := range s.Columns {
-		decoder, err := genColumnDecoder(s, &c)
+		decoder, err := genFieldScanner(s, &c)
 		if err != nil {
 			return "", err
 		}
@@ -399,8 +395,8 @@ func genColDecoderArray(s *Struct) (string, error) {
 	return out + "},\n", nil
 }
 
-// generate column-decoder func (see genColDecoderArray)
-func genColumnDecoder(s *Struct, c *Column) (string, error) {
+// generate field-scanner func (see genFieldScannerArray)
+func genFieldScanner(s *Struct, c *Column) (string, error) {
 	f := c.StructField
 	coltype := c.Type
 	op := c.DecodeOp
@@ -412,77 +408,43 @@ func genColumnDecoder(s *Struct, c *Column) (string, error) {
 		return "", fmt.Errorf("no column oid available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
 	}
 	// TODO(wd): check overflow, when necessary
-	out := fmt.Sprintf("// Decode column %s::%s into (*%s).%s\n", c.Name, coltype, s.Name, f.Name)
-	out += fmt.Sprintf("func(v *%s, vr *pgx.ValueReader) error {\n", s.Name)
-
+	out := fmt.Sprintf("// Decode column %s::%s into v.%s\n", c.Name, coltype, f.Name)
+	out += fmt.Sprintf("func(v *%s) pgx.Scanner {\n", s.Name)
+	takeAddr := ""
+	if len(f.Type) != 0 && f.Type[0] != '*' {
+		takeAddr = "&"
+	}
 	switch {
-	case op.CustomScan():
-		out += fmt.Sprintf("return v.%s.Scan(vr)\n", f.Name)
-	case op.HstoreMapDecode():
-		deref := ""
-		if op.PtrAssign() {
-			deref = "*"
-		}
-		out += fmt.Sprintf("h := pgx.Hstore(%sv.%s)\n", deref, f.Name)
-		out += "return h.Scan(vr)\n"
-	case op.UuidDecode():
-		deref := ""
-		if op.PtrAssign() {
-			deref = "*"
-		}
-		out += "b := vr.ReadBytes(vr.ReadInt32())\n"
-		out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
-		out += "if len(b) != 16 { return errors.New(\"invalid length for uuid (should be 16)\")\n}\n"
-		out += "u, err := uuid.FromBytes(b)\n"
-		out += "if err != nil {\nreturn err\n}\n"
-		out += fmt.Sprintf("%sv.%s = u", deref, f.Name)
-		if op.UuidStringDecode() {
-			out += ".String()"
-		}
-		out += "\nreturn nil\n"
 	default:
-		if c.Type == "json" {
-			switch f.Type {
-			case "string", "*string":
-				out += "s := vr.ReadString(vr.ReadInt32())\n"
-				out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
-				deref := ""
-				if f.Type[0] == '*' {
-					deref = "*"
+		if c.Type != "json" {
+			if op.MaskCast() == Op(0) {
+				out += fmt.Sprintf("return pgtypes.%sScanner(%sv.%s)\n", dtName, takeAddr, f.Name)
+			} else {
+				cast := op.FormatCast()
+				if cast == "" {
+					return "", fmt.Errorf("no column oid available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
 				}
-				out += fmt.Sprintf("%sv.%s = s\n", deref, f.Name)
-				out += "return nil\n"
-			case "[]byte", "*[]byte":
-				out += "b := vr.ReadBytes(vr.ReadInt32())\n"
-				out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
-				deref := ""
-				if f.Type[0] == '*' {
-					deref = "*"
-				}
-				out += fmt.Sprintf("%sv.%s = b\n", deref, f.Name)
-				out += "return nil\n"
-			default:
-				out += "b := vr.ReadBytes(vr.ReadInt32())\n"
-				out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
-				takeAddr := ""
-				if f.Type[0] != '*' {
-					takeAddr = "&"
-				}
-				out += fmt.Sprintf("return json.Unmarshal(b, %sv.%s)", takeAddr, f.Name)
+				out += fmt.Sprintf("return pgtypes.Into%s(%sv.%s)\n", strings.Title(cast), takeAddr, f.Name)
 			}
 		} else {
-			var prefix, suffix string
-			if op.MaskCast() != Op(0) {
-				prefix, suffix = op.FormatCast()+"(", ")"
+			switch f.Type {
+			case "string", "*string":
+				out += fmt.Sprintf("return pgtypes.JSONScannerString(%sv.%s)\n", takeAddr, f.Name)
+			case "[]byte", "*[]byte":
+				out += fmt.Sprintf("return pgtypes.JSONScannerBytes(%sv.%s)\n", takeAddr, f.Name)
+			default:
+				out += fmt.Sprintf("return pgtypes.JSONScanner(%sv.%s)\n", takeAddr, f.Name)
 			}
-			out += fmt.Sprintf("x := %svr.Decode%s()%s\n", prefix, dtName, suffix)
-			out += "if vr.Err() != nil {\nreturn vr.Err()\n}\n"
-			deref := ""
-			if op.PtrAssign() {
-				deref = "*"
-			}
-			out += fmt.Sprintf("%sv.%s = x\n", deref, f.Name)
-			out += "return nil\n"
+		}
+	case op.CustomScan():
+		out += fmt.Sprintf("return %sv.%s\n", takeAddr, f.Name)
+	case op.HstoreMapDecode():
+		out += fmt.Sprintf("return pgtypes.HstoreMapScanner(%sv.%s)\n", takeAddr, f.Name)
+	case op.UuidDecode():
+		if op.UuidStringDecode() {
+			out += fmt.Sprintf("return pgtypes.UUIDScannerString(%sv.%s)\n", takeAddr, f.Name)
+		} else {
+			out += fmt.Sprintf("return pgtypes.UUIDScanner(%sv.%s)\n", takeAddr, f.Name)
 		}
 	}
 	out += "},\n"
@@ -529,17 +491,7 @@ func genAliasArray(s *Struct) string {
 func genOidArray(s *Struct) string {
 	out := fmt.Sprintf("Oids: [%d]pgx.Oid{\n", len(s.Columns))
 	for _, c := range s.Columns {
-		switch c.Type {
-		case "hstore":
-			// hstore oid varies, set it to 0 as a sentinel value:
-			out += "pgx.Oid(0),\n"
-		case "json":
-			out += fmt.Sprintf("pgx.Oid(%d),\n", JSONOid)
-		case "uuid":
-			out += fmt.Sprintf("pgx.Oid(%d),\n", UUIDOid)
-		default:
-			out += fmt.Sprintf("pgx.%sOid,\n", DataTypeNames[c.Type])
-		}
+		out += fmt.Sprintf("pgtypes.%sOid,\n", DataTypeNames[c.Type])
 	}
 	return out + "},\n"
 }
@@ -562,6 +514,7 @@ func genFormatArray(s *Struct) string {
 
 const rowDecoderFmt = `
 // DecodeRow decodes a single row/result from r into v.
+//
 // If an error is returned, the caller should call Rows.Close()
 func (v *%s) DecodeRow(r *pgx.Rows) error {
 	for _ = range r.FieldDescriptions() {
@@ -581,11 +534,11 @@ func (v *%s) DecodeRow(r *pgx.Rows) error {
 				return err
 			}
 			index := int(b[0])
-			if index < 0 || index > len(%sTable.Decoders) - 1 {
+			if index < 0 || index > len(%sTable.UnboundScanners) - 1 {
 				return errors.New("column decoder index out of range")
 			}
-			dec := %sTable.Decoders[index]
-			if err = dec(v, vr); err != nil {
+			bound := %sTable.UnboundScanners[index](v)
+			if err = bound.Scan(vr); err != nil {
 				return err
 			}
 			continue
@@ -596,7 +549,8 @@ func (v *%s) DecodeRow(r *pgx.Rows) error {
 		if index < 0 {
 			return errors.New("column decoder for " + colname + " not found in %sTable")
 		}
-		if err := %sTable.Decoders[index](v, vr); err != nil {
+		bound := %sTable.UnboundScanners[index](v)
+		if err := bound.Scan(vr); err != nil {
 			return err
 		}
 	}
@@ -610,56 +564,118 @@ func genRowDecoder(s *Struct) string {
 	return fmt.Sprintf(rowDecoderFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name)
 }
 
-const paramsEncoderFmt = `
-// %sParamsEncoder binds query/statement parameters from a value
-// of type %s
-type %sParamsEncoder struct {
-	Indexes       []int
-}
+const fieldEncodersFmt = `
+// type %sFieldEncoders binds query/statement parameters from a value
+// of type %s.
+//
+// Parameters are bound positionally, in correspondence with the field indexes
+// stored within the %sFieldEncoders slice.
+type %sFieldEncoders []int
 
 `
 
-// generate type def for {struct-name}ParamsEncoder struct
-func genParamsEncoderType(s *Struct) string {
-	return fmt.Sprintf(paramsEncoderFmt, s.Name, s.Name, s.Name)
+// generate type def for {struct-name}FieldEncoders
+func genFieldEncodersType(s *Struct) string {
+	return fmt.Sprintf(fieldEncodersFmt, s.Name, s.Name, s.Name, s.Name)
 }
 
-const newEncoderFmt = `
-// Encoder creates an unbound instance of type %sParamsEncoder
-// for the columns/fields named by colnames
-func (t *%sTableType) Encoder(colnames ...string) (*%sParamsEncoder, error) {
+const encodersGetterFmt = `
+// Encoders creates an unbound instance of type %sFieldEncoders
+// for the columns/fields named by colnames.
+//
+// Call %sFieldEncoders.Bind to bind encoders from %sFieldEncoders.
+func (t *%sTableType) Encoders(colnames ...string) (%sFieldEncoders, error) {
 	indexes, err := %sTable.Indexes(colnames...)
 	if err != nil {
 		return nil, err
 	}
-
-	pe := &%sParamsEncoder{Indexes: indexes}
-	return pe, nil
+	return %sFieldEncoders(indexes), nil
 }
 
 `
 
-// generate method def for {struct-name}TableType.Encoder
-func genEncoderCreator(s *Struct) string {
-	return fmt.Sprintf(newEncoderFmt, s.Name, s.Name, s.Name, s.Name, s.Name)
+// generate method def for {struct-name}TableType.Encoders
+func genEncodersGetter(s *Struct) string {
+	return fmt.Sprintf(encodersGetterFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name)
 }
 
-const bindValFmt = `
-// Bind binds query/statement parameter encoders from v
-func (pe %sParamsEncoder) Bind(v *%s) ([]pgx.Encoder, error) {
-	encoders := make([]pgx.Encoder, len(pe.Indexes))
-	for i, index := range pe.Indexes {
+const encodersBindFmt = `
+// Bind binds query/statement parameter encoders for v.
+//
+// Encoders are bound positionally, in correspondence with the field indexes
+// stored within the %sFieldEncoders slice.
+func (fe %sFieldEncoders) Bind(v *%s) ([]pgx.Encoder, error) {
+	bound := make([]pgx.Encoder, len(fe))
+	for i, index := range fe {
 		if index < 0 || index > len(%sTable.UnboundEncoders) {
 			return nil, errors.New("column encoder index out of range")
 		}
-		encoders[i] = %sTable.UnboundEncoders[index](v)
+		bound[i] = %sTable.UnboundEncoders[index](v)
 	}
-	return encoders, nil
+	return bound, nil
 }
 
 `
 
-// generate method def for {struct-name}ParamsEncoder.Bind
-func genBindVal(s *Struct) string {
-	return fmt.Sprintf(bindValFmt, s.Name, s.Name, s.Name, s.Name)
+// generate method def for {struct-name}FieldEncoders.Bind
+func genEncodersBind(s *Struct) string {
+	return fmt.Sprintf(encodersBindFmt, s.Name, s.Name, s.Name, s.Name, s.Name)
+}
+
+const fieldScannersFmt = `
+// type %sFieldScanners binds query/statement results to a value
+// of type %s.
+//
+// Results are bound positionally, in correspondence with the field indexes
+// stored within the %sFieldScanners slice.
+type %sFieldScanners []int
+
+`
+
+// generate type def for {struct-name}FieldScanners
+func genFieldScannersType(s *Struct) string {
+	return fmt.Sprintf(fieldScannersFmt, s.Name, s.Name, s.Name, s.Name)
+}
+
+const scannersGetterFmt = `
+// Scanners creates an unbound instance of type %sFieldScanners
+// for the columns/fields named by colnames.
+//
+// Call %sFieldScanners.Bind to bind scanners from %sFieldScanners.
+func (t *%sTableType) Scanners(colnames ...string) (%sFieldScanners, error) {
+	indexes, err := %sTable.Indexes(colnames...)
+	if err != nil {
+		return nil, err
+	}
+	return %sFieldScanners(indexes), nil
+}
+
+`
+
+// generate method def for {struct-name}TableType.Scanners
+func genScannersGetter(s *Struct) string {
+	return fmt.Sprintf(scannersGetterFmt, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name, s.Name)
+}
+
+const scannersBindFmt = `
+// Bind binds query/statement result scanners for v.
+//
+// Scanners are bound positionally, in correspondence with the field indexes
+// stored within the %sFieldScanners slice.
+func (fs %sFieldScanners) Bind(v *%s) ([]pgx.Scanner, error) {
+	bound := make([]pgx.Scanner, len(fs))
+	for i, index := range fs {
+		if index < 0 || index > len(%sTable.UnboundScanners) {
+			return nil, errors.New("column scanner index out of range")
+		}
+		bound[i] = %sTable.UnboundScanners[index](v)
+	}
+	return bound, nil
+}
+
+`
+
+// generate method def for {struct-name}FieldScanners.Bind
+func genScannersBind(s *Struct) string {
+	return fmt.Sprintf(scannersBindFmt, s.Name, s.Name, s.Name, s.Name, s.Name)
 }

@@ -4,10 +4,8 @@ package example
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 
-	"github.com/satori/go.uuid"
 	"github.com/wdamron/pgx"
 	"github.com/wdamron/pgx-gen/pgtypes"
 )
@@ -18,9 +16,9 @@ type PointTableType struct {
 	// UnboundEncoders are used by PointParamsEncoder.Bind to bind
 	// query/statement parameters from a value of type Point
 	UnboundEncoders [10]func(*Point) pgx.Encoder
-	// Decoders can be used to decode a single column value from a
-	// pgx.ValueReader into type Point
-	Decoders [10]func(*Point, *pgx.ValueReader) error
+	// UnboundScanners are used by PointParamsScanner.Bind to bind
+	// query/statement results to fields within type Point
+	UnboundScanners [10]func(*Point) pgx.Scanner
 	// Names contains an ordered list of column names
 	Names [10]string
 	// Types contains an ordered list of column types
@@ -52,12 +50,11 @@ var PointTable = PointTableType{
 		},
 		// Encode v.H as hstore
 		func(v *Point) pgx.Encoder {
-			h := pgx.Hstore(*v.H)
-			return pgtypes.HstoreEncoder(h)
+			return pgtypes.HstoreMapEncoder(*v.H)
 		},
 		// Encode v.H2 as hstore
 		func(v *Point) pgx.Encoder {
-			return v.H2
+			return pgtypes.HstoreEncoder(v.H2)
 		},
 		// Encode v.u as uuid
 		func(v *Point) pgx.Encoder {
@@ -80,95 +77,46 @@ var PointTable = PointTableType{
 			return pgtypes.JSONEncoderBytes(v.j3)
 		},
 	},
-	Decoders: [10]func(*Point, *pgx.ValueReader) error{
-		// Decode column x::varchar[] into (*Point).X
-		func(v *Point, vr *pgx.ValueReader) error {
-			x := vr.DecodeVarcharArray()
-			if vr.Err() != nil {
-				return vr.Err()
-			}
-			v.X = x
-			return nil
+	UnboundScanners: [10]func(*Point) pgx.Scanner{
+		// Decode column x::varchar[] into v.X
+		func(v *Point) pgx.Scanner {
+			return pgtypes.VarcharArrayScanner(&v.X)
 		},
-		// Decode column y::int4 into (*Point).Y
-		func(v *Point, vr *pgx.ValueReader) error {
-			x := int64(vr.DecodeInt4())
-			if vr.Err() != nil {
-				return vr.Err()
-			}
-			*v.Y = x
-			return nil
+		// Decode column y::int4 into v.Y
+		func(v *Point) pgx.Scanner {
+			return pgtypes.IntoInt64(v.Y)
 		},
-		// Decode column z::int4 into (*Point).Z
-		func(v *Point, vr *pgx.ValueReader) error {
-			return v.Z.Scan(vr)
+		// Decode column z::int4 into v.Z
+		func(v *Point) pgx.Scanner {
+			return v.Z
 		},
-		// Decode column h::hstore into (*Point).H
-		func(v *Point, vr *pgx.ValueReader) error {
-			h := pgx.Hstore(*v.H)
-			return h.Scan(vr)
+		// Decode column h::hstore into v.H
+		func(v *Point) pgx.Scanner {
+			return pgtypes.HstoreMapScanner(v.H)
 		},
-		// Decode column h2::hstore into (*Point).H2
-		func(v *Point, vr *pgx.ValueReader) error {
-			return v.H2.Scan(vr)
+		// Decode column h2::hstore into v.H2
+		func(v *Point) pgx.Scanner {
+			return pgtypes.HstoreScanner(&v.H2)
 		},
-		// Decode column id::uuid into (*Point).u
-		func(v *Point, vr *pgx.ValueReader) error {
-			b := vr.ReadBytes(vr.ReadInt32())
-			if vr.Err() != nil {
-				return vr.Err()
-			}
-			if len(b) != 16 {
-				return errors.New("invalid length for uuid (should be 16)")
-			}
-			u, err := uuid.FromBytes(b)
-			if err != nil {
-				return err
-			}
-			v.u = u.String()
-			return nil
+		// Decode column id::uuid into v.u
+		func(v *Point) pgx.Scanner {
+			return pgtypes.UUIDScannerString(&v.u)
 		},
-		// Decode column id2::uuid into (*Point).u2
-		func(v *Point, vr *pgx.ValueReader) error {
-			b := vr.ReadBytes(vr.ReadInt32())
-			if vr.Err() != nil {
-				return vr.Err()
-			}
-			if len(b) != 16 {
-				return errors.New("invalid length for uuid (should be 16)")
-			}
-			u, err := uuid.FromBytes(b)
-			if err != nil {
-				return err
-			}
-			*v.u2 = u
-			return nil
+		// Decode column id2::uuid into v.u2
+		func(v *Point) pgx.Scanner {
+			return pgtypes.UUIDScanner(v.u2)
 		},
-		// Decode column j::json into (*Point).j
-		func(v *Point, vr *pgx.ValueReader) error {
-			s := vr.ReadString(vr.ReadInt32())
-			if vr.Err() != nil {
-				return vr.Err()
-			}
-			*v.j = s
-			return nil
+		// Decode column j::json into v.j
+		func(v *Point) pgx.Scanner {
+			return pgtypes.JSONScannerString(v.j)
 		},
-		// Decode column j2::json into (*Point).j2
-		func(v *Point, vr *pgx.ValueReader) error {
-			b := vr.ReadBytes(vr.ReadInt32())
-			if vr.Err() != nil {
-				return vr.Err()
-			}
-			return json.Unmarshal(b, &v.j2)
+		// Decode column j2::json into v.j2
+		func(v *Point) pgx.Scanner {
+			return pgtypes.JSONScanner(&v.j2)
 		},
-		// Decode column j3::json into (*Point).j3
-		func(v *Point, vr *pgx.ValueReader) error {
-			b := vr.ReadBytes(vr.ReadInt32())
-			if vr.Err() != nil {
-				return vr.Err()
-			}
-			v.j3 = b
-			return nil
+		// Decode column j3::json into v.j3
+		func(v *Point) pgx.Scanner {
+			return pgtypes.JSONScannerBytes(&v.j3)
 		},
 	},
 	Names: [10]string{
@@ -209,18 +157,18 @@ var PointTable = PointTableType{
 		"j2 as __08::json",
 		"j3 as __09::json",
 	},
-	Formats: [10]int{1, 1, 1, 0, 0, 1, 1, 0, 0, 0},
+	Formats: [10]int{1, 1, 1, 1, 1, 1, 1, 0, 0, 0},
 	Oids: [10]pgx.Oid{
-		pgx.VarcharArrayOid,
-		pgx.Int4Oid,
-		pgx.Int4Oid,
-		pgx.Oid(0),
-		pgx.Oid(0),
-		pgx.Oid(2950),
-		pgx.Oid(2950),
-		pgx.Oid(114),
-		pgx.Oid(114),
-		pgx.Oid(114),
+		pgtypes.VarcharArrayOid,
+		pgtypes.Int4Oid,
+		pgtypes.Int4Oid,
+		pgtypes.HstoreOid,
+		pgtypes.HstoreOid,
+		pgtypes.UUIDOid,
+		pgtypes.UUIDOid,
+		pgtypes.JSONOid,
+		pgtypes.JSONOid,
+		pgtypes.JSONOid,
 	},
 }
 
@@ -253,8 +201,10 @@ func (t *PointTableType) Index(colname string) int {
 }
 
 // Indexes returns a slice of indexes of the given columns in PointTable
-// with the given name. If any of the columns are not found, an error will be
-// returned and the returned slice of indexes will be nil.
+// with the given name.
+//
+// If any of the columns are not found, an error will be returned and the returned
+// slice of indexes will be nil.
 func (t *PointTableType) Indexes(colnames ...string) ([]int, error) {
 	indexes := make([]int, len(colnames))
 	for i, colname := range colnames {
@@ -268,8 +218,10 @@ func (t *PointTableType) Indexes(colnames ...string) ([]int, error) {
 }
 
 // Alias aliases column names as hex-encoded indexes, for faster look-ups during
-// decoding. If no column names are provided, all columns will be aliased, in
-// which case AliasAll may be a faster alternative.
+// decoding.
+//
+// If no column names are provided, all columns will be aliased, in which case
+// AliasAll may be a faster alternative.
 func (t *PointTableType) Alias(colnames ...string) ([]string, error) {
 	aliases := []string{}
 	// If no columns are specified, alias all columns:
@@ -293,6 +245,7 @@ func (t *PointTableType) AliasAll() string {
 }
 
 // DecodeRow decodes a single row/result from r into v.
+//
 // If an error is returned, the caller should call Rows.Close()
 func (v *Point) DecodeRow(r *pgx.Rows) error {
 	for _ = range r.FieldDescriptions() {
@@ -312,11 +265,11 @@ func (v *Point) DecodeRow(r *pgx.Rows) error {
 				return err
 			}
 			index := int(b[0])
-			if index < 0 || index > len(PointTable.Decoders)-1 {
+			if index < 0 || index > len(PointTable.UnboundScanners)-1 {
 				return errors.New("column decoder index out of range")
 			}
-			dec := PointTable.Decoders[index]
-			if err = dec(v, vr); err != nil {
+			bound := PointTable.UnboundScanners[index](v)
+			if err = bound.Scan(vr); err != nil {
 				return err
 			}
 			continue
@@ -327,39 +280,78 @@ func (v *Point) DecodeRow(r *pgx.Rows) error {
 		if index < 0 {
 			return errors.New("column decoder for " + colname + " not found in PointTable")
 		}
-		if err := PointTable.Decoders[index](v, vr); err != nil {
+		bound := PointTable.UnboundScanners[index](v)
+		if err := bound.Scan(vr); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// PointParamsEncoder binds query/statement parameters from a value
-// of type Point
-type PointParamsEncoder struct {
-	Indexes []int
-}
+// type PointFieldEncoders binds query/statement parameters from a value
+// of type Point.
+//
+// Parameters are bound positionally, in correspondence with the field indexes
+// stored within the PointFieldEncoders slice.
+type PointFieldEncoders []int
 
-// Encoder creates an unbound instance of type PointParamsEncoder
-// for the columns/fields named by colnames
-func (t *PointTableType) Encoder(colnames ...string) (*PointParamsEncoder, error) {
+// Encoders creates an unbound instance of type PointFieldEncoders
+// for the columns/fields named by colnames.
+//
+// Call PointFieldEncoders.Bind to bind encoders from PointFieldEncoders.
+func (t *PointTableType) Encoders(colnames ...string) (PointFieldEncoders, error) {
 	indexes, err := PointTable.Indexes(colnames...)
 	if err != nil {
 		return nil, err
 	}
-
-	pe := &PointParamsEncoder{Indexes: indexes}
-	return pe, nil
+	return PointFieldEncoders(indexes), nil
 }
 
-// Bind binds query/statement parameter encoders from v
-func (pe PointParamsEncoder) Bind(v *Point) ([]pgx.Encoder, error) {
-	encoders := make([]pgx.Encoder, len(pe.Indexes))
-	for i, index := range pe.Indexes {
+// Bind binds query/statement parameter encoders for v.
+//
+// Encoders are bound positionally, in correspondence with the field indexes
+// stored within the PointFieldEncoders slice.
+func (fe PointFieldEncoders) Bind(v *Point) ([]pgx.Encoder, error) {
+	bound := make([]pgx.Encoder, len(fe))
+	for i, index := range fe {
 		if index < 0 || index > len(PointTable.UnboundEncoders) {
 			return nil, errors.New("column encoder index out of range")
 		}
-		encoders[i] = PointTable.UnboundEncoders[index](v)
+		bound[i] = PointTable.UnboundEncoders[index](v)
 	}
-	return encoders, nil
+	return bound, nil
+}
+
+// type PointFieldScanners binds query/statement results to a value
+// of type Point.
+//
+// Results are bound positionally, in correspondence with the field indexes
+// stored within the PointFieldScanners slice.
+type PointFieldScanners []int
+
+// Scanners creates an unbound instance of type PointFieldScanners
+// for the columns/fields named by colnames.
+//
+// Call PointFieldScanners.Bind to bind scanners from PointFieldScanners.
+func (t *PointTableType) Scanners(colnames ...string) (PointFieldScanners, error) {
+	indexes, err := PointTable.Indexes(colnames...)
+	if err != nil {
+		return nil, err
+	}
+	return PointFieldScanners(indexes), nil
+}
+
+// Bind binds query/statement result scanners for v.
+//
+// Scanners are bound positionally, in correspondence with the field indexes
+// stored within the PointFieldScanners slice.
+func (fs PointFieldScanners) Bind(v *Point) ([]pgx.Scanner, error) {
+	bound := make([]pgx.Scanner, len(fs))
+	for i, index := range fs {
+		if index < 0 || index > len(PointTable.UnboundScanners) {
+			return nil, errors.New("column scanner index out of range")
+		}
+		bound[i] = PointTable.UnboundScanners[index](v)
+	}
+	return bound, nil
 }
