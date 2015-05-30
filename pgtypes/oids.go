@@ -1,6 +1,11 @@
 package pgtypes
 
 const (
+	TextFormatCode   = 0
+	BinaryFormatCode = 1
+)
+
+const (
 	BoolOid, BoolArrayOid               = 16, 1000
 	Int2Oid, Int2ArrayOid               = 21, 1005
 	Int4Oid, Int4ArrayOid               = 23, 1007

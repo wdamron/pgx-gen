@@ -9,14 +9,15 @@ import (
 
 	"github.com/satori/go.uuid"
 	"github.com/wdamron/pgx"
+	"github.com/wdamron/pgx-gen/pgtypes"
 )
 
 // PointTableType is the type of PointTable, which describes the table
 // corresponding with type Point
 type PointTableType struct {
-	// Encoders can be used to encode a single param value from type Point
-	// into a write buffer, as part of a raw query
-	Encoders [10]func(*Point, *pgx.WriteBuf) error
+	// UnboundEncoders are used by PointParamsEncoder.Bind to bind
+	// query/statement parameters from a value of type Point
+	UnboundEncoders [10]func(*Point) pgx.Encoder
 	// Decoders can be used to decode a single column value from a
 	// pgx.ValueReader into type Point
 	Decoders [10]func(*Point, *pgx.ValueReader) error
@@ -36,67 +37,47 @@ type PointTableType struct {
 
 // PointTable describes the table corresponding with type Point
 var PointTable = PointTableType{
-	Encoders: [10]func(*Point, *pgx.WriteBuf) error{
-		// Encode (*Point).X as varchar[]
-		func(v *Point, wbuf *pgx.WriteBuf) error {
-			wbuf.EncodeVarcharArray(v.X)
-			return nil
+	UnboundEncoders: [10]func(*Point) pgx.Encoder{
+		// Encode v.X as varchar[]
+		func(v *Point) pgx.Encoder {
+			return pgtypes.VarcharArrayEncoder(v.X)
 		},
-		// Encode (*Point).Y as int4
-		func(v *Point, wbuf *pgx.WriteBuf) error {
-			wbuf.EncodeInt4(int32(*v.Y))
-			return nil
+		// Encode v.Y as int4
+		func(v *Point) pgx.Encoder {
+			return pgtypes.Int4Encoder(int32(*v.Y))
 		},
-		// Encode (*Point).Z as int4
-		func(v *Point, wbuf *pgx.WriteBuf) error {
-			return v.Z.Encode(wbuf, pgx.Int4Oid)
+		// Encode v.Z as int4
+		func(v *Point) pgx.Encoder {
+			return v.Z
 		},
-		// Encode (*Point).H as hstore
-		func(v *Point, wbuf *pgx.WriteBuf) error {
+		// Encode v.H as hstore
+		func(v *Point) pgx.Encoder {
 			h := pgx.Hstore(*v.H)
-			return h.Encode(wbuf, pgx.Oid(0))
+			return pgtypes.HstoreEncoder(h)
 		},
-		// Encode (*Point).H2 as hstore
-		func(v *Point, wbuf *pgx.WriteBuf) error {
-			return v.H2.Encode(wbuf, pgx.Oid(0))
+		// Encode v.H2 as hstore
+		func(v *Point) pgx.Encoder {
+			return v.H2
 		},
-		// Encode (*Point).u as uuid
-		func(v *Point, wbuf *pgx.WriteBuf) error {
-			u, err := uuid.FromString(v.u)
-			if err != nil {
-				return err
-			}
-			wbuf.WriteInt32(16)
-			wbuf.WriteBytes(u[:16])
-			return nil
+		// Encode v.u as uuid
+		func(v *Point) pgx.Encoder {
+			return pgtypes.UUIDEncoderString(v.u)
 		},
-		// Encode (*Point).u2 as uuid
-		func(v *Point, wbuf *pgx.WriteBuf) error {
-			wbuf.WriteInt32(16)
-			u := *v.u2
-			wbuf.WriteBytes(u[:16])
-			return nil
+		// Encode v.u2 as uuid
+		func(v *Point) pgx.Encoder {
+			return pgtypes.UUIDEncoder(*v.u2)
 		},
-		// Encode (*Point).j as json
-		func(v *Point, wbuf *pgx.WriteBuf) error {
-			wbuf.EncodeText(*v.j)
-			return nil
+		// Encode v.j as json
+		func(v *Point) pgx.Encoder {
+			return pgtypes.JSONEncoderString(*v.j)
 		},
-		// Encode (*Point).j2 as json
-		func(v *Point, wbuf *pgx.WriteBuf) error {
-			b, err := json.Marshal(v.j2)
-			if err != nil {
-				return err
-			}
-			wbuf.WriteInt32(int32(len(b)))
-			wbuf.WriteBytes(b)
-			return nil
+		// Encode v.j2 as json
+		func(v *Point) pgx.Encoder {
+			return pgtypes.JSONEncoder(v.j2)
 		},
-		// Encode (*Point).j3 as json
-		func(v *Point, wbuf *pgx.WriteBuf) error {
-			wbuf.WriteInt32(int32(len(v.j3)))
-			wbuf.WriteBytes(v.j3)
-			return nil
+		// Encode v.j3 as json
+		func(v *Point) pgx.Encoder {
+			return pgtypes.JSONEncoderBytes(v.j3)
 		},
 	},
 	Decoders: [10]func(*Point, *pgx.ValueReader) error{
@@ -353,72 +334,32 @@ func (v *Point) DecodeRow(r *pgx.Rows) error {
 	return nil
 }
 
-// PointParamsEncoder encodes parameter formats and values for a prepared statement
-// to a buffer, and implements pgx.ParamsEncoder
+// PointParamsEncoder binds query/statement parameters from a value
+// of type Point
 type PointParamsEncoder struct {
-	Indexes       []int
-	Formats       []int
-	ValueEncoders []func(v *Point, wbuf *pgx.WriteBuf) error
-	v             *Point
+	Indexes []int
 }
-
-// PointParamsEncoder should implement pgx.ParamsEncoder
-var _ pgx.ParamsEncoder = (*PointParamsEncoder)(nil)
 
 // Encoder creates an unbound instance of type PointParamsEncoder
 // for the columns/fields named by colnames
 func (t *PointTableType) Encoder(colnames ...string) (*PointParamsEncoder, error) {
-	formats := make([]int, len(colnames))
-	encoders := make([]func(*Point, *pgx.WriteBuf) error, len(colnames))
-
 	indexes, err := PointTable.Indexes(colnames...)
 	if err != nil {
 		return nil, err
 	}
-	for i, index := range indexes {
-		formats[i] = PointTable.Formats[index]
-		encoders[i] = PointTable.Encoders[index]
-	}
 
-	pe := &PointParamsEncoder{
-		Indexes:       indexes,
-		Formats:       formats,
-		ValueEncoders: encoders,
-	}
+	pe := &PointParamsEncoder{Indexes: indexes}
 	return pe, nil
 }
 
-// Bind binds value v to pe, returning a pgx.ParamsEncoder for use within raw queries
-func (pe PointParamsEncoder) Bind(v *Point) pgx.ParamsEncoder {
-	return &PointParamsEncoder{
-		Indexes:       pe.Indexes,
-		Formats:       pe.Formats,
-		ValueEncoders: pe.ValueEncoders,
-		v:             v,
-	}
-}
-
-// EncodeParamFormats encodes param formats into wbuf, as part of a raw query
-func (pe *PointParamsEncoder) EncodeParamFormats(ps *pgx.PreparedStatement, wbuf *pgx.WriteBuf) error {
-	if len(ps.ParameterOids) != len(pe.Formats) {
-		return errors.New("param count of encoder and prepared statement do not match")
-	}
-	for i, oid := range ps.ParameterOids {
-		foundOid := PointTable.Oids[pe.Indexes[i]]
-		if oid != foundOid && foundOid != pgx.Oid(0) {
-			return errors.New("param oids of encoder and prepared statement do not match")
+// Bind binds query/statement parameter encoders from v
+func (pe PointParamsEncoder) Bind(v *Point) ([]pgx.Encoder, error) {
+	encoders := make([]pgx.Encoder, len(pe.Indexes))
+	for i, index := range pe.Indexes {
+		if index < 0 || index > len(PointTable.UnboundEncoders) {
+			return nil, errors.New("column encoder index out of range")
 		}
-		wbuf.WriteInt16(int16(pe.Formats[i]))
+		encoders[i] = PointTable.UnboundEncoders[index](v)
 	}
-	return nil
-}
-
-// EncodeParams encodes the param values into wbuf, as part of a raw query
-func (pe *PointParamsEncoder) EncodeParams(ps *pgx.PreparedStatement, wbuf *pgx.WriteBuf) error {
-	for _, enc := range pe.ValueEncoders {
-		if err := enc(pe.v, wbuf); err != nil {
-			return err
-		}
-	}
-	return nil
+	return encoders, nil
 }

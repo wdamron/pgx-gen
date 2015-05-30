@@ -40,8 +40,8 @@ var DataTypeNames = map[string]string{
 	"timestamp[]":   "TimestampArray",
 	"timestampTz[]": "TimestampTzArray",
 	"hstore":        "Hstore",
-	"json":          "Json",
-	"uuid":          "Uuid",
+	"json":          "JSON",
+	"uuid":          "UUID",
 	"oid":           "Oid",
 }
 
@@ -66,7 +66,7 @@ var BinaryDataTypes = map[string]bool{
 	"TextArray":        true,
 	"VarcharArray":     true,
 	"Oid":              true,
-	"Uuid":             true,
+	"UUID":             true,
 }
 
 func NormalizeDataType(dataType string) string {
