@@ -162,8 +162,8 @@ var Decoders = map[string]OpMap{
 		"*[]time.Time": OpPtrAssign,
 	},
 	"hstore": {
-		"pgx.Hstore":         OpCustomScan,
-		"*pgx.Hstore":        OpCustomScan,
+		"pgx.Hstore":         OpAssign,
+		"*pgx.Hstore":        OpPtrAssign,
 		"pgx.NullHstore":     OpCustomScan,
 		"*pgx.NullHstore":    OpCustomScan,
 		"map[string]string":  OpHstoreMapDecode,

@@ -11,6 +11,15 @@ import (
 	"github.com/wdamron/pgx"
 )
 
+const (
+	len1  = "\x00\x00\x00\x01"
+	len2  = "\x00\x00\x00\x02"
+	len4  = "\x00\x00\x00\x04"
+	len8  = "\x00\x00\x00\x08"
+	len10 = "\x00\x00\x00\x0a"
+	len16 = "\x00\x00\x00\x10"
+)
+
 type boolEncoder struct {
 	v bool
 }
@@ -30,12 +39,11 @@ func (e *boolEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 }
 
 func EncodeBool(wbuf *pgx.WriteBuf, v bool) error {
-	cast := 0
+	var cast byte
 	if v {
 		cast = 1
 	}
-	b := []byte{0, 0, 0, 1, byte(cast)}
-	wbuf.WriteBytes(b)
+	wbuf.WriteBytes(append([]byte(len1), cast))
 	return nil
 }
 
@@ -58,8 +66,7 @@ func (e *int2Encoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 }
 
 func EncodeInt2(wbuf *pgx.WriteBuf, v int16) error {
-	b := []byte{0, 0, 0, 2, byte(v >> 8), byte(v)}
-	wbuf.WriteBytes(b)
+	wbuf.WriteBytes(append([]byte(len2), byte(v>>8), byte(v)))
 	return nil
 }
 
@@ -82,8 +89,7 @@ func (e *int4Encoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 }
 
 func EncodeInt4(wbuf *pgx.WriteBuf, v int32) error {
-	b := []byte{0, 0, 0, 4, byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)}
-	wbuf.WriteBytes(b)
+	wbuf.WriteBytes(append([]byte(len4), byte(v>>24), byte(v>>16), byte(v>>8), byte(v)))
 	return nil
 }
 
@@ -106,7 +112,7 @@ func (e *int8Encoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 }
 
 func EncodeInt8(wbuf *pgx.WriteBuf, v int64) error {
-	b := []byte{0, 0, 0, 8}
+	b := []byte(len8)
 	b = append(b, byte(v>>56), byte(v>>48), byte(v>>40), byte(v>>32))
 	b = append(b, byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
 	wbuf.WriteBytes(b)
@@ -132,11 +138,7 @@ func (e *float4Encoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 }
 
 func EncodeFloat4(wbuf *pgx.WriteBuf, v float32) error {
-	b := []byte{0, 0, 0, 4}
-	cast := int32(math.Float32bits(v))
-	b = append(b, byte(cast>>24), byte(cast>>16), byte(cast>>8), byte(cast))
-	wbuf.WriteBytes(b)
-	return nil
+	return EncodeInt4(wbuf, int32(math.Float32bits(v)))
 }
 
 type float8Encoder struct {
@@ -158,12 +160,7 @@ func (e *float8Encoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 }
 
 func EncodeFloat8(wbuf *pgx.WriteBuf, v float64) error {
-	b := []byte{0, 0, 0, 8}
-	cast := int32(math.Float64bits(v))
-	b = append(b, byte(cast>>56), byte(cast>>48), byte(cast>>40), byte(cast>>32))
-	b = append(b, byte(cast>>24), byte(cast>>16), byte(cast>>8), byte(cast))
-	wbuf.WriteBytes(b)
-	return nil
+	return EncodeInt8(wbuf, int64(math.Float64bits(v)))
 }
 
 type byteaEncoder struct {
@@ -305,8 +302,7 @@ func (e *dateEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 }
 
 func EncodeDate(wbuf *pgx.WriteBuf, v time.Time) error {
-	b := []byte{0, 0, 0, 10}
-	wbuf.WriteBytes(append(b, v.Format("2006-01-02")...))
+	wbuf.WriteString(len10 + v.Format("2006-01-02"))
 	return nil
 }
 
@@ -354,7 +350,7 @@ func EncodeTimestampTz(wbuf *pgx.WriteBuf, v time.Time) error {
 	microsecSinceUnixEpoch := v.Unix()*1000000 + int64(v.Nanosecond())/1000
 	microsecSinceY2K := microsecSinceUnixEpoch - microsecFromUnixEpochToY2K
 	x := microsecSinceY2K
-	b := []byte{0, 0, 0, 8}
+	b := []byte(len8)
 	b = append(b, byte(x>>56), byte(x>>48), byte(x>>40), byte(x>>32))
 	b = append(b, byte(x>>24), byte(x>>16), byte(x>>8), byte(x))
 	wbuf.WriteBytes(b)
@@ -380,9 +376,7 @@ func (e *oidEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 }
 
 func EncodeOid(wbuf *pgx.WriteBuf, v pgx.Oid) error {
-	b := []byte{0, 0, 0, 4, byte(v >> 24), byte(v >> 16), byte(v >> 8), byte(v)}
-	wbuf.WriteBytes(b)
-	return nil
+	return EncodeInt4(wbuf, int32(v))
 }
 
 func encodeArrayHeaderBytes(oid pgx.Oid, length, sizePerItem int) []byte {
@@ -701,6 +695,11 @@ func HstoreEncoder(v pgx.Hstore) pgx.Encoder {
 	return &hstoreEncoder{v}
 }
 
+func HstoreMapEncoder(v map[string]string) pgx.Encoder {
+	h := pgx.Hstore(v)
+	return &hstoreEncoder{h}
+}
+
 func (e *hstoreEncoder) FormatCode() int16 { return 1 }
 
 func (e *hstoreEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
@@ -742,8 +741,7 @@ func (e *uuidEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 }
 
 func EncodeUUID(wbuf *pgx.WriteBuf, v uuid.UUID) error {
-	wbuf.WriteInt32(16)
-	wbuf.WriteBytes(v[:16])
+	wbuf.WriteBytes(append([]byte(len16), v[:16]...))
 	return nil
 }
 

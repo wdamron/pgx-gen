@@ -66,6 +66,7 @@ var BinaryDataTypes = map[string]bool{
 	"TextArray":        true,
 	"VarcharArray":     true,
 	"Oid":              true,
+	"Hstore":           true,
 	"UUID":             true,
 }
 
