@@ -35,10 +35,10 @@ func (e *boolEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("BoolEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeBool(wbuf, e.v)
+	return encodeBool(wbuf, e.v)
 }
 
-func EncodeBool(wbuf *pgx.WriteBuf, v bool) error {
+func encodeBool(wbuf *pgx.WriteBuf, v bool) error {
 	var cast byte
 	if v {
 		cast = 1
@@ -62,10 +62,10 @@ func (e *int2Encoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("Int2Encoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeInt2(wbuf, e.v)
+	return encodeInt2(wbuf, e.v)
 }
 
-func EncodeInt2(wbuf *pgx.WriteBuf, v int16) error {
+func encodeInt2(wbuf *pgx.WriteBuf, v int16) error {
 	wbuf.WriteBytes(append([]byte(len2), byte(v>>8), byte(v)))
 	return nil
 }
@@ -85,10 +85,10 @@ func (e *int4Encoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("Int4Encoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeInt4(wbuf, e.v)
+	return encodeInt4(wbuf, e.v)
 }
 
-func EncodeInt4(wbuf *pgx.WriteBuf, v int32) error {
+func encodeInt4(wbuf *pgx.WriteBuf, v int32) error {
 	wbuf.WriteBytes(append([]byte(len4), byte(v>>24), byte(v>>16), byte(v>>8), byte(v)))
 	return nil
 }
@@ -108,10 +108,10 @@ func (e *int8Encoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("Int8Encoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeInt8(wbuf, e.v)
+	return encodeInt8(wbuf, e.v)
 }
 
-func EncodeInt8(wbuf *pgx.WriteBuf, v int64) error {
+func encodeInt8(wbuf *pgx.WriteBuf, v int64) error {
 	b := []byte(len8)
 	b = append(b, byte(v>>56), byte(v>>48), byte(v>>40), byte(v>>32))
 	b = append(b, byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
@@ -134,11 +134,11 @@ func (e *float4Encoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("Float4Encoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeFloat4(wbuf, e.v)
+	return encodeFloat4(wbuf, e.v)
 }
 
-func EncodeFloat4(wbuf *pgx.WriteBuf, v float32) error {
-	return EncodeInt4(wbuf, int32(math.Float32bits(v)))
+func encodeFloat4(wbuf *pgx.WriteBuf, v float32) error {
+	return encodeInt4(wbuf, int32(math.Float32bits(v)))
 }
 
 type float8Encoder struct {
@@ -156,11 +156,11 @@ func (e *float8Encoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("Float8Encoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeFloat8(wbuf, e.v)
+	return encodeFloat8(wbuf, e.v)
 }
 
-func EncodeFloat8(wbuf *pgx.WriteBuf, v float64) error {
-	return EncodeInt8(wbuf, int64(math.Float64bits(v)))
+func encodeFloat8(wbuf *pgx.WriteBuf, v float64) error {
+	return encodeInt8(wbuf, int64(math.Float64bits(v)))
 }
 
 type byteaEncoder struct {
@@ -178,10 +178,10 @@ func (e *byteaEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("ByteaEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeBytea(wbuf, e.v)
+	return encodeBytea(wbuf, e.v)
 }
 
-func EncodeBytea(wbuf *pgx.WriteBuf, v []byte) error {
+func encodeBytea(wbuf *pgx.WriteBuf, v []byte) error {
 	totalLen := 4 + len(v)
 	b := make([]byte, totalLen)
 	binary.BigEndian.PutUint32(b, uint32(len(v)))
@@ -203,10 +203,10 @@ func TextEncoder(v string) pgx.Encoder {
 func (e *textEncoder) FormatCode() int16 { return 0 }
 
 func (e *textEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
-	return EncodeText(wbuf, e.v)
+	return encodeText(wbuf, e.v)
 }
 
-func EncodeText(wbuf *pgx.WriteBuf, v string) error {
+func encodeText(wbuf *pgx.WriteBuf, v string) error {
 	totalLen := 4 + len(v)
 	b := make([]byte, totalLen)
 	binary.BigEndian.PutUint32(b, uint32(len(v)))
@@ -229,10 +229,10 @@ func TextEncoderBytes(v []byte) pgx.Encoder {
 func (e *textEncoderBytes) FormatCode() int16 { return 0 }
 
 func (e *textEncoderBytes) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
-	return EncodeTextBytes(wbuf, e.v)
+	return encodeTextBytes(wbuf, e.v)
 }
 
-func EncodeTextBytes(wbuf *pgx.WriteBuf, v []byte) error {
+func encodeTextBytes(wbuf *pgx.WriteBuf, v []byte) error {
 	totalLen := 4 + len(v)
 	b := make([]byte, totalLen)
 	binary.BigEndian.PutUint32(b, uint32(len(v)))
@@ -258,11 +258,11 @@ func (e *varcharEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("VarcharEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeVarchar(wbuf, e.v)
+	return encodeVarchar(wbuf, e.v)
 }
 
-func EncodeVarchar(wbuf *pgx.WriteBuf, v string) error {
-	return EncodeText(wbuf, v)
+func encodeVarchar(wbuf *pgx.WriteBuf, v string) error {
+	return encodeText(wbuf, v)
 }
 
 type varcharEncoderBytes struct {
@@ -280,7 +280,7 @@ func (e *varcharEncoderBytes) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("VarcharEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeTextBytes(wbuf, e.v)
+	return encodeTextBytes(wbuf, e.v)
 }
 
 type dateEncoder struct {
@@ -298,10 +298,10 @@ func (e *dateEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("DateEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeDate(wbuf, e.v)
+	return encodeDate(wbuf, e.v)
 }
 
-func EncodeDate(wbuf *pgx.WriteBuf, v time.Time) error {
+func encodeDate(wbuf *pgx.WriteBuf, v time.Time) error {
 	wbuf.WriteString(len10 + v.Format("2006-01-02"))
 	return nil
 }
@@ -321,11 +321,11 @@ func (e *timestampEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("TimestampEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeTimestamp(wbuf, e.v)
+	return encodeTimestamp(wbuf, e.v)
 }
 
-func EncodeTimestamp(wbuf *pgx.WriteBuf, v time.Time) error {
-	return EncodeTimestampTz(wbuf, v)
+func encodeTimestamp(wbuf *pgx.WriteBuf, v time.Time) error {
+	return encodeTimestampTz(wbuf, v)
 }
 
 type timestampTzEncoder struct {
@@ -343,10 +343,10 @@ func (e *timestampTzEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("TimestampTzEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeTimestampTz(wbuf, e.v)
+	return encodeTimestampTz(wbuf, e.v)
 }
 
-func EncodeTimestampTz(wbuf *pgx.WriteBuf, v time.Time) error {
+func encodeTimestampTz(wbuf *pgx.WriteBuf, v time.Time) error {
 	microsecSinceUnixEpoch := v.Unix()*1000000 + int64(v.Nanosecond())/1000
 	microsecSinceY2K := microsecSinceUnixEpoch - microsecFromUnixEpochToY2K
 	x := microsecSinceY2K
@@ -372,11 +372,11 @@ func (e *oidEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("OidEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeOid(wbuf, e.v)
+	return encodeOid(wbuf, e.v)
 }
 
-func EncodeOid(wbuf *pgx.WriteBuf, v pgx.Oid) error {
-	return EncodeInt4(wbuf, int32(v))
+func encodeOid(wbuf *pgx.WriteBuf, v pgx.Oid) error {
+	return encodeInt4(wbuf, int32(v))
 }
 
 func encodeArrayHeaderBytes(oid pgx.Oid, length, sizePerItem int) []byte {
@@ -405,10 +405,10 @@ func (e *boolArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("BoolArrayEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeBoolArray(wbuf, e.v)
+	return encodeBoolArray(wbuf, e.v)
 }
 
-func EncodeBoolArray(wbuf *pgx.WriteBuf, vs []bool) error {
+func encodeBoolArray(wbuf *pgx.WriteBuf, vs []bool) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(BoolOid, len(vs), 5))
 	for _, v := range vs {
 		if err := EncodeBool(wbuf, v); err != nil {
@@ -433,10 +433,10 @@ func (e *int2ArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("Int2ArrayEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeInt2Array(wbuf, e.v)
+	return encodeInt2Array(wbuf, e.v)
 }
 
-func EncodeInt2Array(wbuf *pgx.WriteBuf, vs []int16) error {
+func encodeInt2Array(wbuf *pgx.WriteBuf, vs []int16) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(Int2Oid, len(vs), 6))
 	for _, v := range vs {
 		if err := EncodeInt2(wbuf, v); err != nil {
@@ -461,10 +461,10 @@ func (e *int4ArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("Int4ArrayEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeInt4Array(wbuf, e.v)
+	return encodeInt4Array(wbuf, e.v)
 }
 
-func EncodeInt4Array(wbuf *pgx.WriteBuf, vs []int32) error {
+func encodeInt4Array(wbuf *pgx.WriteBuf, vs []int32) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(Int4Oid, len(vs), 8))
 	for _, v := range vs {
 		if err := EncodeInt4(wbuf, v); err != nil {
@@ -489,10 +489,10 @@ func (e *int8ArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("Int8ArrayEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeInt8Array(wbuf, e.v)
+	return encodeInt8Array(wbuf, e.v)
 }
 
-func EncodeInt8Array(wbuf *pgx.WriteBuf, vs []int64) error {
+func encodeInt8Array(wbuf *pgx.WriteBuf, vs []int64) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(Int8Oid, len(vs), 12))
 	for _, v := range vs {
 		if err := EncodeInt8(wbuf, v); err != nil {
@@ -517,10 +517,10 @@ func (e *float4ArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("Float4ArrayEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeFloat4Array(wbuf, e.v)
+	return encodeFloat4Array(wbuf, e.v)
 }
 
-func EncodeFloat4Array(wbuf *pgx.WriteBuf, vs []float32) error {
+func encodeFloat4Array(wbuf *pgx.WriteBuf, vs []float32) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(Int4Oid, len(vs), 8))
 	for _, v := range vs {
 		if err := EncodeFloat4(wbuf, v); err != nil {
@@ -545,10 +545,10 @@ func (e *float8ArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("Float8ArrayEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeFloat8Array(wbuf, e.v)
+	return encodeFloat8Array(wbuf, e.v)
 }
 
-func EncodeFloat8Array(wbuf *pgx.WriteBuf, vs []float64) error {
+func encodeFloat8Array(wbuf *pgx.WriteBuf, vs []float64) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(Int8Oid, len(vs), 12))
 	for _, v := range vs {
 		if err := EncodeFloat8(wbuf, v); err != nil {
@@ -573,14 +573,14 @@ func (e *textArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("TextArrayEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeTextArray(wbuf, e.v)
+	return encodeTextArray(wbuf, e.v)
 }
 
-func EncodeTextArray(wbuf *pgx.WriteBuf, vs []string) error {
-	return encodeTextArray(wbuf, vs, TextOid)
+func encodeTextArray(wbuf *pgx.WriteBuf, vs []string) error {
+	return encodeTextArrayGeneric(wbuf, vs, TextOid)
 }
 
-func encodeTextArray(wbuf *pgx.WriteBuf, vs []string, oid pgx.Oid) error {
+func encodeTextArrayGeneric(wbuf *pgx.WriteBuf, vs []string, oid pgx.Oid) error {
 	var totalStringSize int
 	for _, v := range vs {
 		totalStringSize += len(v)
@@ -624,11 +624,11 @@ func (e *varcharArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("VarcharArrayEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeVarcharArray(wbuf, e.v)
+	return encodeVarcharArray(wbuf, e.v)
 }
 
-func EncodeVarcharArray(wbuf *pgx.WriteBuf, vs []string) error {
-	return encodeTextArray(wbuf, vs, VarcharOid)
+func encodeVarcharArray(wbuf *pgx.WriteBuf, vs []string) error {
+	return encodeTextArrayGeneric(wbuf, vs, VarcharOid)
 }
 
 type timestampArrayEncoder struct {
@@ -646,10 +646,10 @@ func (e *timestampArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("TimestampArrayEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeTimestampArray(wbuf, e.v)
+	return encodeTimestampArray(wbuf, e.v)
 }
 
-func EncodeTimestampArray(wbuf *pgx.WriteBuf, vs []time.Time) error {
+func encodeTimestampArray(wbuf *pgx.WriteBuf, vs []time.Time) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(TimestampOid, len(vs), 12))
 	for _, v := range vs {
 		if err := EncodeTimestamp(wbuf, v); err != nil {
@@ -674,10 +674,10 @@ func (e *timestampTzArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error 
 		return fmt.Errorf("TimestampTzArrayEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeTimestampTzArray(wbuf, e.v)
+	return encodeTimestampTzArray(wbuf, e.v)
 }
 
-func EncodeTimestampTzArray(wbuf *pgx.WriteBuf, vs []time.Time) error {
+func encodeTimestampTzArray(wbuf *pgx.WriteBuf, vs []time.Time) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(TimestampTzOid, len(vs), 12))
 	for _, v := range vs {
 		if err := EncodeTimestampTz(wbuf, v); err != nil {
@@ -703,10 +703,10 @@ func HstoreMapEncoder(v map[string]string) pgx.Encoder {
 func (e *hstoreEncoder) FormatCode() int16 { return 1 }
 
 func (e *hstoreEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
-	return EncodeHstore(wbuf, e.v)
+	return encodeHstore(wbuf, e.v)
 }
 
-func EncodeHstore(wbuf *pgx.WriteBuf, kv pgx.Hstore) error {
+func encodeHstore(wbuf *pgx.WriteBuf, kv pgx.Hstore) error {
 	wbuf.WriteInt32(int32(len(kv)))
 	for k, v := range kv {
 		wbuf.WriteInt32(int32(len(k)))
@@ -737,10 +737,10 @@ func (e *uuidEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("UUIDEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeUUID(wbuf, e.v)
+	return encodeUUID(wbuf, e.v)
 }
 
-func EncodeUUID(wbuf *pgx.WriteBuf, v uuid.UUID) error {
+func encodeUUID(wbuf *pgx.WriteBuf, v uuid.UUID) error {
 	wbuf.WriteBytes(append([]byte(len16), v[:16]...))
 	return nil
 }
@@ -760,10 +760,10 @@ func (e *uuidArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("UUIDArrayEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeUUIDArray(wbuf, e.v)
+	return encodeUUIDArray(wbuf, e.v)
 }
 
-func EncodeUUIDArray(wbuf *pgx.WriteBuf, vs []uuid.UUID) error {
+func encodeUUIDArray(wbuf *pgx.WriteBuf, vs []uuid.UUID) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(UUIDOid, len(vs), 16))
 	for _, v := range vs {
 		if err := EncodeUUID(wbuf, v); err != nil {
@@ -788,10 +788,10 @@ func (e *jsonEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 		return fmt.Errorf("JSONEncoder.Encode cannot encode into OID: %d", oid)
 	}
 
-	return EncodeJSON(wbuf, e.v)
+	return encodeJSON(wbuf, e.v)
 }
 
-func EncodeJSON(wbuf *pgx.WriteBuf, v interface{}) error {
+func encodeJSON(wbuf *pgx.WriteBuf, v interface{}) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err
