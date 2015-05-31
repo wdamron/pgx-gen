@@ -13,11 +13,11 @@ import (
 // PointTableType is the type of PointTable, which describes the table
 // corresponding with type Point
 type PointTableType struct {
-	// UnboundEncoders are used by PointParamsEncoder.Bind to bind
-	// query/statement parameters from a value of type Point
+	// UnboundEncoders are used by PointParamsEncoder.Bind to bind query/statement
+	// parameters from a value of type Point
 	UnboundEncoders [10]func(*Point) pgx.Encoder
-	// UnboundScanners are used by PointParamsScanner.Bind to bind
-	// query/statement results to fields within type Point
+	// UnboundScanners are used by PointParamsScanner.Bind to bind query/statement
+	// results to fields within type Point
 	UnboundScanners [10]func(*Point) pgx.Scanner
 	// Names contains an ordered list of column names
 	Names [10]string
@@ -173,6 +173,7 @@ var PointTable = PointTableType{
 }
 
 // Index returns the index of the column in PointTable with the given name.
+//
 // If no matching column is found, the returned index will be -1.
 func (t *PointTableType) Index(colname string) int {
 	switch colname {
@@ -200,11 +201,11 @@ func (t *PointTableType) Index(colname string) int {
 	return -1
 }
 
-// Indexes returns a slice of indexes of the given columns in PointTable
-// with the given name.
+// Indexes returns a slice of indexes of the given columns in PointTable with
+// the given name.
 //
-// If any of the columns are not found, an error will be returned and the returned
-// slice of indexes will be nil.
+// If any of the columns are not found, an error will be returned and the
+// returned slice of indexes will be nil.
 func (t *PointTableType) Indexes(colnames ...string) ([]int, error) {
 	indexes := make([]int, len(colnames))
 	for i, colname := range colnames {
@@ -217,8 +218,8 @@ func (t *PointTableType) Indexes(colnames ...string) ([]int, error) {
 	return indexes, nil
 }
 
-// Alias aliases column names as hex-encoded indexes, for faster look-ups during
-// decoding.
+// Alias aliases column names as hex-encoded indexes, for faster look-ups
+// during decoding.
 //
 // If no column names are provided, all columns will be aliased, in which case
 // AliasAll may be a faster alternative.
@@ -288,15 +289,15 @@ func (v *Point) DecodeRow(r *pgx.Rows) error {
 	return nil
 }
 
-// type PointFieldEncoders binds query/statement parameters from a value
-// of type Point.
+// type PointFieldEncoders binds query/statement parameters from a value of
+// type Point.
 //
 // Parameters are bound positionally, in correspondence with the field indexes
 // stored within the PointFieldEncoders slice.
 type PointFieldEncoders []int
 
-// Encoders creates an unbound instance of type PointFieldEncoders
-// for the columns/fields named by colnames.
+// Encoders creates an unbound instance of type PointFieldEncoders for the
+// columns/fields named by colnames.
 //
 // Call PointFieldEncoders.Bind to bind encoders from PointFieldEncoders.
 func (t *PointTableType) Encoders(colnames ...string) (PointFieldEncoders, error) {
@@ -322,15 +323,15 @@ func (fe PointFieldEncoders) Bind(v *Point) ([]pgx.Encoder, error) {
 	return bound, nil
 }
 
-// type PointFieldScanners binds query/statement results to a value
-// of type Point.
+// type PointFieldScanners binds query/statement results to a value of type
+// Point.
 //
 // Results are bound positionally, in correspondence with the field indexes
 // stored within the PointFieldScanners slice.
 type PointFieldScanners []int
 
-// Scanners creates an unbound instance of type PointFieldScanners
-// for the columns/fields named by colnames.
+// Scanners creates an unbound instance of type PointFieldScanners for the
+// columns/fields named by colnames.
 //
 // Call PointFieldScanners.Bind to bind scanners from PointFieldScanners.
 func (t *PointTableType) Scanners(colnames ...string) (PointFieldScanners, error) {
