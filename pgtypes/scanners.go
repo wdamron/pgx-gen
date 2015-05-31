@@ -65,11 +65,11 @@ func BoolScanner(v *bool) pgx.Scanner {
 }
 
 func (s boolScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeBool(vr)
+	*s.v = decodeBool(vr)
 	return vr.Err()
 }
 
-func DecodeBool(vr *pgx.ValueReader) bool {
+func decodeBool(vr *pgx.ValueReader) bool {
 	if vr.Len() == -1 {
 		vr.Fatal(pgx.ProtocolError("Cannot decode null into bool"))
 		return false
@@ -103,11 +103,11 @@ func Int2Scanner(v *int16) pgx.Scanner {
 }
 
 func (s int2Scanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeInt2(vr)
+	*s.v = decodeInt2(vr)
 	return vr.Err()
 }
 
-func DecodeInt2(vr *pgx.ValueReader) int16 {
+func decodeInt2(vr *pgx.ValueReader) int16 {
 	if vr.Len() == -1 {
 		vr.Fatal(pgx.ProtocolError("Cannot decode null into int16"))
 		return 0
@@ -140,11 +140,11 @@ func Int4Scanner(v *int32) pgx.Scanner {
 }
 
 func (s int4Scanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeInt4(vr)
+	*s.v = decodeInt4(vr)
 	return vr.Err()
 }
 
-func DecodeInt4(vr *pgx.ValueReader) int32 {
+func decodeInt4(vr *pgx.ValueReader) int32 {
 	if vr.Len() == -1 {
 		vr.Fatal(pgx.ProtocolError("Cannot decode null into int32"))
 		return 0
@@ -177,11 +177,11 @@ func Int8Scanner(v *int64) pgx.Scanner {
 }
 
 func (s int8Scanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeInt8(vr)
+	*s.v = decodeInt8(vr)
 	return vr.Err()
 }
 
-func DecodeInt8(vr *pgx.ValueReader) int64 {
+func decodeInt8(vr *pgx.ValueReader) int64 {
 	if vr.Len() == -1 {
 		vr.Fatal(pgx.ProtocolError("Cannot decode null into int64"))
 		return 0
@@ -214,11 +214,11 @@ func Float4Scanner(v *float32) pgx.Scanner {
 }
 
 func (s float4Scanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeFloat4(vr)
+	*s.v = decodeFloat4(vr)
 	return vr.Err()
 }
 
-func DecodeFloat4(vr *pgx.ValueReader) float32 {
+func decodeFloat4(vr *pgx.ValueReader) float32 {
 	if vr.Len() == -1 {
 		vr.Fatal(pgx.ProtocolError("Cannot decode null into float32"))
 		return 0
@@ -252,11 +252,11 @@ func Float8Scanner(v *float64) pgx.Scanner {
 }
 
 func (s float8Scanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeFloat8(vr)
+	*s.v = decodeFloat8(vr)
 	return vr.Err()
 }
 
-func DecodeFloat8(vr *pgx.ValueReader) float64 {
+func decodeFloat8(vr *pgx.ValueReader) float64 {
 	if vr.Len() == -1 {
 		vr.Fatal(pgx.ProtocolError("Cannot decode null into float64"))
 		return 0
@@ -290,11 +290,11 @@ func ByteaScanner(v *[]byte) pgx.Scanner {
 }
 
 func (s byteaScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeBytea(vr)
+	*s.v = decodeBytea(vr)
 	return vr.Err()
 }
 
-func DecodeBytea(vr *pgx.ValueReader) []byte {
+func decodeBytea(vr *pgx.ValueReader) []byte {
 	if vr.Len() == -1 {
 		return nil
 	}
@@ -321,11 +321,11 @@ func TextScanner(v *string) pgx.Scanner {
 }
 
 func (s textScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeText(vr)
+	*s.v = decodeText(vr)
 	return vr.Err()
 }
 
-func DecodeText(vr *pgx.ValueReader) string {
+func decodeText(vr *pgx.ValueReader) string {
 	return decodeString(vr)
 }
 
@@ -333,7 +333,7 @@ func VarcharScanner(v *string) pgx.Scanner {
 	return TextScanner(v)
 }
 
-func DecodeVarchar(vr *pgx.ValueReader) string {
+func decodeVarchar(vr *pgx.ValueReader) string {
 	return decodeString(vr)
 }
 
@@ -346,11 +346,11 @@ func DateScanner(v *time.Time) pgx.Scanner {
 }
 
 func (s dateScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeDate(vr)
+	*s.v = decodeDate(vr)
 	return vr.Err()
 }
 
-func DecodeDate(vr *pgx.ValueReader) time.Time {
+func decodeDate(vr *pgx.ValueReader) time.Time {
 	var zeroTime time.Time
 
 	if vr.Len() == -1 {
@@ -384,11 +384,11 @@ func TimestampScanner(v *time.Time) pgx.Scanner {
 }
 
 func (s timestampScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeTimestamp(vr)
+	*s.v = decodeTimestamp(vr)
 	return vr.Err()
 }
 
-func DecodeTimestamp(vr *pgx.ValueReader) time.Time {
+func decodeTimestamp(vr *pgx.ValueReader) time.Time {
 	var zeroTime time.Time
 
 	if vr.Len() == -1 {
@@ -424,11 +424,11 @@ func TimestampTzScanner(v *time.Time) pgx.Scanner {
 }
 
 func (s timestampTzScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeTimestampTz(vr)
+	*s.v = decodeTimestampTz(vr)
 	return vr.Err()
 }
 
-func DecodeTimestampTz(vr *pgx.ValueReader) time.Time {
+func decodeTimestampTz(vr *pgx.ValueReader) time.Time {
 	var zeroTime time.Time
 
 	if vr.Len() == -1 {
@@ -465,11 +465,11 @@ func OidScanner(v *pgx.Oid) pgx.Scanner {
 }
 
 func (s oidScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeOid(vr)
+	*s.v = decodeOid(vr)
 	return vr.Err()
 }
 
-func DecodeOid(vr *pgx.ValueReader) pgx.Oid {
+func decodeOid(vr *pgx.ValueReader) pgx.Oid {
 	if vr.Len() == -1 {
 		vr.Fatal(pgx.ProtocolError("Cannot decode null into Oid"))
 		return 0
@@ -526,11 +526,11 @@ func JSONScannerString(v *string) pgx.Scanner {
 }
 
 func (s jsonScannerString) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeJSONString(vr)
+	*s.v = decodeJSONString(vr)
 	return vr.Err()
 }
 
-func DecodeJSONString(vr *pgx.ValueReader) string {
+func decodeJSONString(vr *pgx.ValueReader) string {
 	return decodeString(vr)
 }
 
@@ -543,11 +543,11 @@ func JSONScannerBytes(v *[]byte) pgx.Scanner {
 }
 
 func (s jsonScannerBytes) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeJSONBytes(vr)
+	*s.v = decodeJSONBytes(vr)
 	return vr.Err()
 }
 
-func DecodeJSONBytes(vr *pgx.ValueReader) []byte {
+func decodeJSONBytes(vr *pgx.ValueReader) []byte {
 	return decodeBytes(vr)
 }
 
@@ -560,11 +560,11 @@ func UUIDScanner(v *uuid.UUID) pgx.Scanner {
 }
 
 func (s uuidScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeUUID(vr)
+	*s.v = decodeUUID(vr)
 	return vr.Err()
 }
 
-func DecodeUUID(vr *pgx.ValueReader) uuid.UUID {
+func decodeUUID(vr *pgx.ValueReader) uuid.UUID {
 	var u uuid.UUID
 	switch vr.Len() {
 	case -1:
@@ -591,12 +591,12 @@ func UUIDScannerString(v *string) pgx.Scanner {
 }
 
 func (s uuidScannerString) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeUUIDString(vr)
+	*s.v = decodeUUIDString(vr)
 	return vr.Err()
 }
 
-func DecodeUUIDString(vr *pgx.ValueReader) string {
-	u := DecodeUUID(vr)
+func decodeUUIDString(vr *pgx.ValueReader) string {
+	u := decodeUUID(vr)
 	if vr.Err() != nil {
 		return ""
 	}
@@ -612,11 +612,11 @@ func HstoreScanner(v *pgx.Hstore) pgx.Scanner {
 }
 
 func (s hstoreScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeHstore(vr)
+	*s.v = decodeHstore(vr)
 	return vr.Err()
 }
 
-func DecodeHstore(vr *pgx.ValueReader) pgx.Hstore {
+func decodeHstore(vr *pgx.ValueReader) pgx.Hstore {
 	size := int(vr.ReadInt32())
 	h := make(pgx.Hstore, size)
 	for i := 0; i < size; i++ {
@@ -639,11 +639,11 @@ func HstoreMapScanner(v *map[string]string) pgx.Scanner {
 }
 
 func (s hstoreMapScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeHstoreMap(vr)
+	*s.v = decodeHstoreMap(vr)
 	return vr.Err()
 }
 
-func DecodeHstoreMap(vr *pgx.ValueReader) map[string]string {
+func decodeHstoreMap(vr *pgx.ValueReader) map[string]string {
 	size := int(vr.ReadInt32())
 	h := make(map[string]string, size)
 	for i := 0; i < size; i++ {
@@ -666,11 +666,11 @@ func BoolArrayScanner(v *[]bool) pgx.Scanner {
 }
 
 func (s boolArrayScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeBoolArray(vr)
+	*s.v = decodeBoolArray(vr)
 	return vr.Err()
 }
 
-func DecodeBoolArray(vr *pgx.ValueReader) []bool {
+func decodeBoolArray(vr *pgx.ValueReader) []bool {
 	if vr.Len() == -1 {
 		return nil
 	}
@@ -720,11 +720,11 @@ func Int2ArrayScanner(v *[]int16) pgx.Scanner {
 }
 
 func (s int2ArrayScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeInt2Array(vr)
+	*s.v = decodeInt2Array(vr)
 	return vr.Err()
 }
 
-func DecodeInt2Array(vr *pgx.ValueReader) []int16 {
+func decodeInt2Array(vr *pgx.ValueReader) []int16 {
 	if vr.Len() == -1 {
 		return nil
 	}
@@ -772,11 +772,11 @@ func Int4ArrayScanner(v *[]int32) pgx.Scanner {
 }
 
 func (s int4ArrayScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeInt4Array(vr)
+	*s.v = decodeInt4Array(vr)
 	return vr.Err()
 }
 
-func DecodeInt4Array(vr *pgx.ValueReader) []int32 {
+func decodeInt4Array(vr *pgx.ValueReader) []int32 {
 	if vr.Len() == -1 {
 		return nil
 	}
@@ -824,11 +824,11 @@ func Int8ArrayScanner(v *[]int64) pgx.Scanner {
 }
 
 func (s int8ArrayScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeInt8Array(vr)
+	*s.v = decodeInt8Array(vr)
 	return vr.Err()
 }
 
-func DecodeInt8Array(vr *pgx.ValueReader) []int64 {
+func decodeInt8Array(vr *pgx.ValueReader) []int64 {
 	if vr.Len() == -1 {
 		return nil
 	}
@@ -876,11 +876,11 @@ func Float4ArrayScanner(v *[]float32) pgx.Scanner {
 }
 
 func (s float4ArrayScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeFloat4Array(vr)
+	*s.v = decodeFloat4Array(vr)
 	return vr.Err()
 }
 
-func DecodeFloat4Array(vr *pgx.ValueReader) []float32 {
+func decodeFloat4Array(vr *pgx.ValueReader) []float32 {
 	if vr.Len() == -1 {
 		return nil
 	}
@@ -929,11 +929,11 @@ func Float8ArrayScanner(v *[]float64) pgx.Scanner {
 }
 
 func (s float8ArrayScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeFloat8Array(vr)
+	*s.v = decodeFloat8Array(vr)
 	return vr.Err()
 }
 
-func DecodeFloat8Array(vr *pgx.ValueReader) []float64 {
+func decodeFloat8Array(vr *pgx.ValueReader) []float64 {
 	if vr.Len() == -1 {
 		return nil
 	}
@@ -982,11 +982,11 @@ func TextArrayScanner(v *[]string) pgx.Scanner {
 }
 
 func (s textArrayScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeTextArray(vr)
+	*s.v = decodeTextArray(vr)
 	return vr.Err()
 }
 
-func DecodeTextArray(vr *pgx.ValueReader) []string {
+func decodeTextArray(vr *pgx.ValueReader) []string {
 	if vr.Len() == -1 {
 		return nil
 	}
@@ -1025,8 +1025,8 @@ func VarcharArrayScanner(v *[]string) pgx.Scanner {
 	return TextArrayScanner(v)
 }
 
-func DecodeVarcharArray(vr *pgx.ValueReader) []string {
-	return DecodeTextArray(vr)
+func decodeVarcharArray(vr *pgx.ValueReader) []string {
+	return decodeTextArray(vr)
 }
 
 type timestampArrayScanner struct {
@@ -1038,11 +1038,11 @@ func TimestampArrayScanner(v *[]time.Time) pgx.Scanner {
 }
 
 func (s timestampArrayScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeTimestampArray(vr)
+	*s.v = decodeTimestampArray(vr)
 	return vr.Err()
 }
 
-func DecodeTimestampArray(vr *pgx.ValueReader) []time.Time {
+func decodeTimestampArray(vr *pgx.ValueReader) []time.Time {
 	if vr.Len() == -1 {
 		return nil
 	}
@@ -1087,8 +1087,8 @@ func TimestampTzArrayScanner(v *[]time.Time) pgx.Scanner {
 	return TimestampArrayScanner(v)
 }
 
-func DecodeTimestampTzArray(vr *pgx.ValueReader) []time.Time {
-	return DecodeTimestampArray(vr)
+func decodeTimestampTzArray(vr *pgx.ValueReader) []time.Time {
+	return decodeTimestampArray(vr)
 }
 
 type uuidArrayScanner struct {
@@ -1100,11 +1100,11 @@ func UUIDArrayScanner(v *[]uuid.UUID) pgx.Scanner {
 }
 
 func (s uuidArrayScanner) Scan(vr *pgx.ValueReader) error {
-	*s.v = DecodeUUIDArray(vr)
+	*s.v = decodeUUIDArray(vr)
 	return vr.Err()
 }
 
-func DecodeUUIDArray(vr *pgx.ValueReader) []uuid.UUID {
+func decodeUUIDArray(vr *pgx.ValueReader) []uuid.UUID {
 	if vr.Len() == -1 {
 		return nil
 	}

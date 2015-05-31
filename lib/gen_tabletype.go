@@ -4,27 +4,6 @@ import (
 	"fmt"
 )
 
-const tableTypeFmt = `
-%s
-type %sTableType struct {
-	%s
-	UnboundEncoders    [%d]func(*%s) pgx.Encoder
-	%s
-	UnboundScanners    [%d]func(*%s) pgx.Scanner
-	// Names contains an ordered list of column names
-	Names [%d]string
-	// Types contains an ordered list of column types
-	Types [%d]string
-	%s
-	Aliases     [%d]string
-	// Formats contains an ordered list of column format codes (text=0, binary=1)
-	Formats     [%d]int
-	%s
-	Oids        [%d]pgx.Oid
-}
-
-`
-
 // generate type def for {struct-name}TableType struct
 func genTableType(s *Struct) string {
 	cols := len(s.Columns)
