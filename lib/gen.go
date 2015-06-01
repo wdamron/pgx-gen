@@ -169,3 +169,14 @@ func AutoComment(s string) string {
 func AutoCommentLn(s string) string {
 	return AutoComment(s) + "\n"
 }
+
+func AutoCommentf(format string, args ...interface{}) string {
+	if format == "" {
+		return ""
+	}
+	s := fmt.Sprintf(format, args...)
+	if format[len(format)-1] == '\n' {
+		return AutoCommentLn(s)
+	}
+	return AutoComment(s)
+}

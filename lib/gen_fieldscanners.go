@@ -12,9 +12,9 @@ type %sFieldScanners []int
 
 // generate type def for {struct-name}FieldScanners
 func genFieldScannersType(s *Struct) string {
-	doc := AutoCommentLn(fmt.Sprintf("type %sFieldScanners binds query/statement results to a value of type %s.", s.Name, s.Name))
+	doc := AutoCommentf("type %sFieldScanners binds query/statement results to a value of type %s.\n", s.Name, s.Name)
 	doc += "//\n"
-	doc += AutoComment(fmt.Sprintf("Results are bound positionally, in correspondence with the field indexes stored within the %sFieldScanners slice.", s.Name))
+	doc += AutoCommentf("Results are bound positionally, in correspondence with the field indexes stored within the %sFieldScanners slice.", s.Name)
 	return fmt.Sprintf(fieldScannersFmt, doc, s.Name)
 }
 
@@ -32,9 +32,9 @@ func (t *%sTableType) Scanners(colnames ...string) (%sFieldScanners, error) {
 
 // generate method def for {struct-name}TableType.Scanners
 func genScannersGetter(s *Struct) string {
-	doc := AutoCommentLn(fmt.Sprintf("Scanners creates an unbound instance of type %sFieldScanners for the columns/fields named by colnames.", s.Name))
+	doc := AutoCommentf("Scanners creates an unbound instance of type %sFieldScanners for the columns/fields named by colnames.\n", s.Name)
 	doc += "//\n"
-	doc += AutoComment(fmt.Sprintf("Call %sFieldScanners.Bind to bind scanners from %sFieldScanners.", s.Name, s.Name))
+	doc += AutoCommentf("Call %sFieldScanners.Bind to bind scanners from %sFieldScanners.", s.Name, s.Name)
 	return fmt.Sprintf(scannersGetterFmt, doc, s.Name, s.Name, s.Name, s.Name)
 }
 
@@ -57,6 +57,6 @@ func (fs %sFieldScanners) Bind(v *%s) ([]pgx.Scanner, error) {
 func genScannersBind(s *Struct) string {
 	doc := AutoCommentLn("Bind binds query/statement result scanners for v.")
 	doc += "//\n"
-	doc += AutoComment(fmt.Sprintf("Scanners are bound positionally, in correspondence with the field indexes stored within the %sFieldScanners slice.", s.Name))
+	doc += AutoCommentf("Scanners are bound positionally, in correspondence with the field indexes stored within the %sFieldScanners slice.", s.Name)
 	return fmt.Sprintf(scannersBindFmt, doc, s.Name, s.Name, s.Name, s.Name)
 }

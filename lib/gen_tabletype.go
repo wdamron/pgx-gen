@@ -8,13 +8,13 @@ import (
 func genTableType(s *Struct) string {
 	cols := len(s.Columns)
 
-	out := AutoCommentLn(fmt.Sprintf("%sTableType is the type of %sTable, which describes the table corresponding with type %s", s.Name, s.Name, s.Name))
+	out := AutoCommentf("%sTableType is the type of %sTable, which describes the table corresponding with type %s\n", s.Name, s.Name, s.Name)
 	out += fmt.Sprintf("type %sTableType struct {\n", s.Name)
 
-	out += AutoCommentLn(fmt.Sprintf("UnboundEncoders are used by %sParamsEncoder.Bind to bind query/statement parameters from a value of type %s", s.Name, s.Name))
+	out += AutoCommentf("UnboundEncoders are used by %sParamsEncoder.Bind to bind query/statement parameters from a value of type %s\n", s.Name, s.Name)
 	out += fmt.Sprintf("UnboundEncoders    [%d]func(*%s) pgx.Encoder\n", cols, s.Name)
 
-	out += AutoCommentLn(fmt.Sprintf("UnboundScanners are used by %sParamsScanner.Bind to bind query/statement results to fields within type %s", s.Name, s.Name))
+	out += AutoCommentf("UnboundScanners are used by %sParamsScanner.Bind to bind query/statement results to fields within type %s\n", s.Name, s.Name)
 	out += fmt.Sprintf("UnboundScanners    [%d]func(*%s) pgx.Scanner\n", cols, s.Name)
 
 	out += AutoCommentLn("Names contains an ordered list of column names")

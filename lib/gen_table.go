@@ -43,11 +43,14 @@ func genFieldEncoderArray(s *Struct) (string, error) {
 		f := c.StructField
 		op := c.EncodeOp
 		if op == Op(0) && c.Type != "json" {
-			return "", fmt.Errorf("no column encoder available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
+			return "", fmt.Errorf("no encoder available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
 		}
 		dtName := DataTypeNames[c.Type]
 		if dtName == "" {
-			return "", fmt.Errorf("no column oid available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
+			return "", fmt.Errorf("no matching datatype found for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
+		}
+		if f.Type == "" {
+			return "", fmt.Errorf("no type defined for field: %s.%s", s.Name, f.Name)
 		}
 
 		out += fmt.Sprintf("// Encode v.%s as %s\n", f.Name, c.Type)
@@ -106,17 +109,20 @@ func genFieldScanner(s *Struct, c *Column) (string, error) {
 	coltype := c.Type
 	op := c.DecodeOp
 	if op == Op(0) && c.Type != "json" {
-		return "", fmt.Errorf("no column decoder available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
+		return "", fmt.Errorf("no scanner available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
 	}
 	dtName := DataTypeNames[coltype]
 	if dtName == "" {
-		return "", fmt.Errorf("no column oid available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
+		return "", fmt.Errorf("no matching datatype found for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
+	}
+	if f.Type == "" {
+		return "", fmt.Errorf("no type defined for field: %s.%s", s.Name, f.Name)
 	}
 	// TODO(wd): check overflow, when necessary
 	out := fmt.Sprintf("// Decode column %s::%s into v.%s\n", c.Name, coltype, f.Name)
 	out += fmt.Sprintf("func(v *%s) pgx.Scanner {\n", s.Name)
 	takeAddr := ""
-	if len(f.Type) != 0 && f.Type[0] != '*' {
+	if f.Type[0] != '*' {
 		takeAddr = "&"
 	}
 	switch {
@@ -127,7 +133,7 @@ func genFieldScanner(s *Struct, c *Column) (string, error) {
 			} else {
 				cast := op.FormatCast()
 				if cast == "" {
-					return "", fmt.Errorf("no column oid available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
+					return "", fmt.Errorf("no scanner available for field: %s.%s (coltype=%s, fieldtype=%s)", s.Name, f.Name, c.Type, f.Type)
 				}
 				out += fmt.Sprintf("return pgtypes.Into%s(%sv.%s)\n", strings.Title(cast), takeAddr, f.Name)
 			}

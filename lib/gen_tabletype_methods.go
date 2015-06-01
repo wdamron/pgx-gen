@@ -7,7 +7,7 @@ import (
 
 // generate method def for ({struct-name})TableType.Index
 func genIndexMethod(s *Struct) string {
-	out := AutoCommentLn(fmt.Sprintf("Index returns the index of the column in %sTable with the given name.", s.Name))
+	out := AutoCommentf("Index returns the index of the column in %sTable with the given name.\n", s.Name)
 	out += "//\n"
 	out += AutoCommentLn("If no matching column is found, the returned index will be -1.")
 	out += fmt.Sprintf("func (t *%sTableType) Index(colname string) int {\n", s.Name)
@@ -38,7 +38,7 @@ func (t *%sTableType) Indexes(colnames ...string) ([]int, error) {
 
 // generate method def for ({struct-name})TableType.Indexes
 func genIndexesMethod(s *Struct) string {
-	doc := AutoCommentLn(fmt.Sprintf("Indexes returns a slice of indexes of the given columns in %sTable with the given name.", s.Name))
+	doc := AutoCommentf("Indexes returns a slice of indexes of the given columns in %sTable with the given name.\n", s.Name)
 	doc += "//\n"
 	doc += AutoComment("If any of the columns are not found, an error will be returned and the returned slice of indexes will be nil.")
 	return fmt.Sprintf(indexesMethodFmt, doc, s.Name, s.Name)
