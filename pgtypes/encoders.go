@@ -411,7 +411,7 @@ func (e *boolArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 func encodeBoolArray(wbuf *pgx.WriteBuf, vs []bool) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(BoolOid, len(vs), 5))
 	for _, v := range vs {
-		if err := EncodeBool(wbuf, v); err != nil {
+		if err := encodeBool(wbuf, v); err != nil {
 			return err
 		}
 	}
@@ -439,7 +439,7 @@ func (e *int2ArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 func encodeInt2Array(wbuf *pgx.WriteBuf, vs []int16) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(Int2Oid, len(vs), 6))
 	for _, v := range vs {
-		if err := EncodeInt2(wbuf, v); err != nil {
+		if err := encodeInt2(wbuf, v); err != nil {
 			return err
 		}
 	}
@@ -467,7 +467,7 @@ func (e *int4ArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 func encodeInt4Array(wbuf *pgx.WriteBuf, vs []int32) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(Int4Oid, len(vs), 8))
 	for _, v := range vs {
-		if err := EncodeInt4(wbuf, v); err != nil {
+		if err := encodeInt4(wbuf, v); err != nil {
 			return err
 		}
 	}
@@ -495,7 +495,7 @@ func (e *int8ArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 func encodeInt8Array(wbuf *pgx.WriteBuf, vs []int64) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(Int8Oid, len(vs), 12))
 	for _, v := range vs {
-		if err := EncodeInt8(wbuf, v); err != nil {
+		if err := encodeInt8(wbuf, v); err != nil {
 			return err
 		}
 	}
@@ -523,7 +523,7 @@ func (e *float4ArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 func encodeFloat4Array(wbuf *pgx.WriteBuf, vs []float32) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(Int4Oid, len(vs), 8))
 	for _, v := range vs {
-		if err := EncodeFloat4(wbuf, v); err != nil {
+		if err := encodeFloat4(wbuf, v); err != nil {
 			return err
 		}
 	}
@@ -551,7 +551,7 @@ func (e *float8ArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 func encodeFloat8Array(wbuf *pgx.WriteBuf, vs []float64) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(Int8Oid, len(vs), 12))
 	for _, v := range vs {
-		if err := EncodeFloat8(wbuf, v); err != nil {
+		if err := encodeFloat8(wbuf, v); err != nil {
 			return err
 		}
 	}
@@ -597,9 +597,9 @@ func encodeTextArrayGeneric(wbuf *pgx.WriteBuf, vs []string, oid pgx.Oid) error 
 	var enc func(*pgx.WriteBuf, string) error
 	switch oid {
 	default:
-		enc = EncodeText
+		enc = encodeText
 	case VarcharOid:
-		enc = EncodeVarchar
+		enc = encodeVarchar
 	}
 	for _, v := range vs {
 		if err := enc(wbuf, v); err != nil {
@@ -652,7 +652,7 @@ func (e *timestampArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 func encodeTimestampArray(wbuf *pgx.WriteBuf, vs []time.Time) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(TimestampOid, len(vs), 12))
 	for _, v := range vs {
-		if err := EncodeTimestamp(wbuf, v); err != nil {
+		if err := encodeTimestamp(wbuf, v); err != nil {
 			return err
 		}
 	}
@@ -680,7 +680,7 @@ func (e *timestampTzArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error 
 func encodeTimestampTzArray(wbuf *pgx.WriteBuf, vs []time.Time) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(TimestampTzOid, len(vs), 12))
 	for _, v := range vs {
-		if err := EncodeTimestampTz(wbuf, v); err != nil {
+		if err := encodeTimestampTz(wbuf, v); err != nil {
 			return err
 		}
 	}
@@ -766,7 +766,7 @@ func (e *uuidArrayEncoder) Encode(wbuf *pgx.WriteBuf, oid pgx.Oid) error {
 func encodeUUIDArray(wbuf *pgx.WriteBuf, vs []uuid.UUID) error {
 	wbuf.WriteBytes(encodeArrayHeaderBytes(UUIDOid, len(vs), 16))
 	for _, v := range vs {
-		if err := EncodeUUID(wbuf, v); err != nil {
+		if err := encodeUUID(wbuf, v); err != nil {
 			return err
 		}
 	}

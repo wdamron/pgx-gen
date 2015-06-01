@@ -12,9 +12,9 @@ type %sFieldEncoders []int
 
 // generate type def for {struct-name}FieldEncoders
 func genFieldEncodersType(s *Struct) string {
-	doc := AutoCommentLn(fmt.Sprintf("type %sFieldEncoders binds query/statement parameters from a value of type %s.", s.Name, s.Name))
+	doc := AutoCommentf("type %sFieldEncoders binds query/statement parameters from a value of type %s.\n", s.Name, s.Name)
 	doc += "//\n"
-	doc += AutoComment(fmt.Sprintf("Parameters are bound positionally, in correspondence with the field indexes stored within the %sFieldEncoders slice.", s.Name))
+	doc += AutoCommentf("Parameters are bound positionally, in correspondence with the field indexes stored within the %sFieldEncoders slice.", s.Name)
 	return fmt.Sprintf(fieldEncodersFmt, doc, s.Name)
 }
 
@@ -32,9 +32,9 @@ func (t *%sTableType) Encoders(colnames ...string) (%sFieldEncoders, error) {
 
 // generate method def for {struct-name}TableType.Encoders
 func genEncodersGetter(s *Struct) string {
-	doc := AutoCommentLn(fmt.Sprintf("Encoders creates an unbound instance of type %sFieldEncoders for the columns/fields named by colnames.", s.Name))
+	doc := AutoCommentf("Encoders creates an unbound instance of type %sFieldEncoders for the columns/fields named by colnames.\n", s.Name)
 	doc += "//\n"
-	doc += AutoComment(fmt.Sprintf("Call %sFieldEncoders.Bind to bind encoders from %sFieldEncoders.", s.Name, s.Name))
+	doc += AutoCommentf("Call %sFieldEncoders.Bind to bind encoders from %sFieldEncoders.", s.Name, s.Name)
 	return fmt.Sprintf(encodersGetterFmt, doc, s.Name, s.Name, s.Name, s.Name)
 }
 
@@ -57,6 +57,6 @@ func (fe %sFieldEncoders) Bind(v *%s) ([]pgx.Encoder, error) {
 func genEncodersBind(s *Struct) string {
 	doc := AutoCommentLn("Bind binds query/statement parameter encoders for v.")
 	doc += "//\n"
-	doc += AutoComment(fmt.Sprintf("Encoders are bound positionally, in correspondence with the field indexes stored within the %sFieldEncoders slice.", s.Name))
+	doc += AutoCommentf("Encoders are bound positionally, in correspondence with the field indexes stored within the %sFieldEncoders slice.", s.Name)
 	return fmt.Sprintf(encodersBindFmt, doc, s.Name, s.Name, s.Name, s.Name)
 }
