@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/wdamron/astx"
-	lib "github.com/wdamron/pgx-gen/lib"
+	"github.com/wdamron/pgx-gen"
 )
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
 		outpath = strings.TrimSuffix(path, filepath.Ext(path)) + "_pgxgen.go"
 	}
 
-	f := lib.NewFile(af)
+	f := pgxgen.NewFile(af)
 	gen, err := f.Gen()
 	if err != nil {
 		Err(err)
