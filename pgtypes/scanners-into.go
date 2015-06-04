@@ -7,102 +7,6 @@ import (
 	"github.com/wdamron/pgx"
 )
 
-type g_intScanner struct {
-	v *int
-}
-
-func IntoInt(v *int) pgx.Scanner {
-	return g_intScanner{v}
-}
-
-func (s g_intScanner) Scan(vr *pgx.ValueReader) error {
-	if vr.Len() == -1 {
-		vr.Fatal(pgx.ProtocolError("Cannot decode null into int"))
-		return vr.Err()
-	}
-
-	if vr.Type().FormatCode != BinaryFormatCode {
-		vr.Fatal(pgx.ProtocolError(fmt.Sprintf("Unknown field description format code: %v", vr.Type().FormatCode)))
-		return vr.Err()
-	}
-
-	switch vr.Type().DataType {
-	case BoolOid:
-		*s.v = int(vr.ReadByte())
-		return vr.Err()
-	case Int2Oid:
-		*s.v = int(vr.ReadInt16())
-		return vr.Err()
-	case Int4Oid:
-		*s.v = int(vr.ReadInt32())
-		return vr.Err()
-	case Int8Oid:
-		*s.v = int(vr.ReadInt64())
-		return vr.Err()
-	default:
-		vr.Fatal(pgx.ProtocolError(fmt.Sprintf("Cannot decode oid %v into int", vr.Type().DataType)))
-		return vr.Err()
-	}
-}
-
-type g_uintScanner struct {
-	v *uint
-}
-
-func IntoUint(v *uint) pgx.Scanner {
-	return g_uintScanner{v}
-}
-
-func (s g_uintScanner) Scan(vr *pgx.ValueReader) error {
-	if vr.Len() == -1 {
-		vr.Fatal(pgx.ProtocolError("Cannot decode null into int"))
-		return vr.Err()
-	}
-
-	if vr.Type().FormatCode != BinaryFormatCode {
-		vr.Fatal(pgx.ProtocolError(fmt.Sprintf("Unknown field description format code: %v", vr.Type().FormatCode)))
-		return vr.Err()
-	}
-
-	switch vr.Type().DataType {
-	case BoolOid:
-		v := int8(vr.ReadByte())
-		if v < 0 {
-			vr.Fatal(fmt.Errorf("Cannot decode negative value into uint", v, v))
-			return vr.Err()
-		}
-		*s.v = uint(v)
-		return vr.Err()
-	case Int2Oid:
-		v := vr.ReadInt16()
-		if v < 0 {
-			vr.Fatal(fmt.Errorf("Cannot decode negative value into uint", v, v))
-			return vr.Err()
-		}
-		*s.v = uint(v)
-		return vr.Err()
-	case Int4Oid:
-		v := vr.ReadInt32()
-		if v < 0 {
-			vr.Fatal(fmt.Errorf("Cannot decode negative value into uint", v, v))
-			return vr.Err()
-		}
-		*s.v = uint(v)
-		return vr.Err()
-	case Int8Oid:
-		v := vr.ReadInt64()
-		if v < 0 {
-			vr.Fatal(fmt.Errorf("Cannot decode negative value into uint", v, v))
-			return vr.Err()
-		}
-		*s.v = uint(v)
-		return vr.Err()
-	default:
-		vr.Fatal(pgx.ProtocolError(fmt.Sprintf("Cannot decode oid %v into uint", vr.Type().DataType)))
-		return vr.Err()
-	}
-}
-
 type g_int16Scanner struct {
 	v *int16
 }
@@ -131,16 +35,16 @@ func (s g_int16Scanner) Scan(vr *pgx.ValueReader) error {
 		return vr.Err()
 	case Int4Oid:
 		v := vr.ReadInt32()
-		if v > math.MaxInt16 {
-			vr.Fatal(fmt.Errorf("%T %d is larger than max int16", v, v))
+		if v < math.MinInt16 || v > math.MaxInt16 {
+			vr.Fatal(fmt.Errorf("%T %d out of range for int16", v, v))
 			return vr.Err()
 		}
 		*s.v = int16(v)
 		return vr.Err()
 	case Int8Oid:
 		v := vr.ReadInt64()
-		if v > math.MaxInt16 {
-			vr.Fatal(fmt.Errorf("%T %d is larger than max int16", v, v))
+		if v < math.MinInt16 || v > math.MaxInt16 {
+			vr.Fatal(fmt.Errorf("%T %d out of range for int16", v, v))
 			return vr.Err()
 		}
 		*s.v = int16(v)
@@ -248,8 +152,8 @@ func (s g_int32Scanner) Scan(vr *pgx.ValueReader) error {
 		return vr.Err()
 	case Int8Oid:
 		v := vr.ReadInt64()
-		if v > math.MaxInt32 {
-			vr.Fatal(fmt.Errorf("%T %d is larger than max int32", v, v))
+		if v < math.MinInt32 || v > math.MaxInt32 {
+			vr.Fatal(fmt.Errorf("%T %d out of range for int32", v, v))
 			return vr.Err()
 		}
 		*s.v = int32(v)
@@ -443,8 +347,8 @@ func (s g_float32Scanner) Scan(vr *pgx.ValueReader) error {
 		return vr.Err()
 	case Float8Oid:
 		v := math.Float64frombits(uint64(vr.ReadInt64()))
-		if v > math.MaxFloat32 {
-			vr.Fatal(fmt.Errorf("Value %d exceeds max float32", v))
+		if math.Abs(v) < math.SmallestNonzeroFloat32 || v > math.MaxFloat32 {
+			vr.Fatal(fmt.Errorf("Value %d out of range for float32", v))
 			return vr.Err()
 		}
 		*s.v = float32(v)
